@@ -224,6 +224,37 @@ impl DocHook for ExampleHook {
     }
 }
 
+/// What an answer cannot claim, in plain words: each external dataset its value was read from whose data is
+/// older than its source allows (FLC-SEM-007), as Metrics says it.
+pub(crate) fn limits_of(value: &Value) -> Vec<String> {
+    value["stale"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|s| {
+            let source = s["source"].as_str().unwrap_or("a source");
+            let within = s["fresh_within_minutes"].as_i64().unwrap_or(0);
+            match s["written_at"].as_str() {
+                Some(at) => format!(
+                    "Read from {source}, last written at {at}: older than the {within} minutes it is to be fresh within, so this may not be today's figure."
+                ),
+                None => format!("Read from {source}, whose data is of no known age: this may not be today's figure."),
+            }
+        })
+        .collect()
+}
+
+/// An answer with what it cannot claim: read from data older than its source allows, it carries those datasets
+/// in its evidence and says so in its `limits`, never a total passed off as current.
+pub(crate) fn bounded(mut answer: Value, value: &Value) -> Value {
+    let limits = limits_of(value);
+    if !limits.is_empty() {
+        answer["evidence"]["stale"] = value["stale"].clone();
+        answer["limits"] = json!(limits);
+    }
+    answer
+}
+
 /// What Metrics says for the request, with the evidence behind it.
 async fn answer_for(k: &Kernel, ctx: &Ctx, intent: &Intent, docs: &[Doc]) -> Result<Value> {
     let doc =
@@ -237,7 +268,7 @@ async fn answer_for(k: &Kernel, ctx: &Ctx, intent: &Intent, docs: &[Doc]) -> Res
             let v = metrics(k, ctx, "/value", json!({"metric": metric})).await?;
             let mut evidence = evidence;
             evidence["as_of"] = v["as_of"].clone();
-            Ok(json!({"status": "answered", "intent": intent.json(), "result": {"value": v["value"], "unit": v["unit"]}, "evidence": evidence}))
+            Ok(bounded(json!({"status": "answered", "intent": intent.json(), "result": {"value": v["value"], "unit": v["unit"]}, "evidence": evidence}), &v))
         }
         Intent::Series { metric, period, periods } => {
             let s = metrics(k, ctx, "/series", json!({"metric": metric, "bucket": period.word(), "periods": periods.to_string()})).await?;
@@ -289,4 +320,29 @@ pub async fn propose(k: &Kernel, ctx: &Ctx, metric: &str, why: &str) -> Result<V
     Ok(
         json!({"draft": draft, "check": check, "next": "Choose what starts it and who looks, check it, and keep it as a release: someone else reviews it before it runs."}),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_value_read_from_stale_data_says_so() {
+        assert!(limits_of(&json!({"value": "150", "stale": []})).is_empty(), "fresh: nothing to say");
+        assert!(limits_of(&json!({"value": "150"})).is_empty(), "a Metrics that says nothing of staleness: nothing claimed");
+        let said = limits_of(&json!({"value": "150", "stale": [
+            {"source": "orders_lake", "written_at": "2026-11-08T09:00:00Z", "fresh_within_minutes": 60},
+            {"source": "returns_lake", "written_at": null, "fresh_within_minutes": 30}
+        ]}));
+        assert_eq!(said.len(), 2);
+        assert!(said[0].contains("orders_lake") && said[0].contains("2026-11-08T09:00:00Z") && said[0].contains("60 minutes"), "{said:?}");
+        assert!(said[1].contains("returns_lake") && said[1].contains("no known age"), "{said:?}");
+        // The answer carries them, and says so; a fresh one says nothing more.
+        let stale = json!({"value": "150", "stale": [{"source": "orders_lake", "written_at": "2026-11-08T09:00:00Z", "fresh_within_minutes": 60}]});
+        let answer = bounded(json!({"status": "answered", "evidence": {"metric": "Lake revenue"}}), &stale);
+        assert_eq!(answer["evidence"]["stale"][0]["source"], "orders_lake");
+        assert_eq!(answer["limits"].as_array().map(Vec::len), Some(1), "{answer}");
+        let fresh = bounded(json!({"status": "answered", "evidence": {}}), &json!({"value": "150", "stale": []}));
+        assert!(fresh.get("limits").is_none() && fresh["evidence"].get("stale").is_none(), "{fresh}");
+    }
 }
