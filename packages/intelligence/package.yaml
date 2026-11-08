@@ -1,5 +1,5 @@
 package: intelligence
-version: 0.1.0
+version: 0.1.1
 label: Intelligence
 description: "Questions about certified metrics, answered with the asker's own rights, with the plan followed and the evidence behind it"
 depends: [core, metrics]
