@@ -1,8 +1,8 @@
 id: intelligence
 name: Intelligence
-version: 0.1.0
+version: 0.1.1
 publisher: cbferrum
-summary: "Ask about certified metrics in plain words: answered with your own rights, with the plan it followed and the evidence behind it, a question back when it is not sure, and a plain no when it cannot; proposals become ordinary reviewed processes"
+summary: "Ask about certified metrics in plain words: answered with your own rights, the plan and the evidence shown, a question back when unsure, a plain no when it cannot"
 description: README.md
 categories: [analytics]
 license: AGPL-3.0-only
