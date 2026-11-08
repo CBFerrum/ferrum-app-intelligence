@@ -1,0 +1,17 @@
+- name: Question
+  label: Question
+  label_plural: Questions
+  kind: master
+  module: intelligence
+  title_field: question
+  description: What someone asked, what it was taken to mean, and what came of it. The record behind every answer, kept for the person who asked.
+  fields:
+    - {name: question, type: text, read_only: true, in_list: true}
+    - {name: asked_by, type: email, read_only: true, in_list: true, in_filter: true}
+    - {name: outcome, type: select, options: [Answered, Asked Back, Declined], read_only: true, in_list: true, in_filter: true}
+    - {name: understood_by, type: data, read_only: true, description: "What took the question to mean what it did: the rules, or a model"}
+    - {name: intent, type: json, read_only: true, description: "What it was taken to mean, as a typed request about certified metrics"}
+    - {name: plan, type: text, read_only: true, description: "What was done to answer it"}
+    - {name: answer, type: json, read_only: true}
+    - {name: reason, type: text, read_only: true, description: "Why it asked back or declined"}
+  list: {columns: [question, asked_by, outcome], sort: created_at desc}
