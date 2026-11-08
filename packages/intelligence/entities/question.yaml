@@ -15,3 +15,20 @@
     - {name: answer, type: json, read_only: true}
     - {name: reason, type: text, read_only: true, description: "Why it asked back or declined"}
   list: {columns: [question, asked_by, outcome], sort: created_at desc}
+
+- name: Example
+  label: Example
+  label_plural: Examples
+  kind: master
+  module: intelligence
+  title_field: phrase
+  description: A phrase people here use and the certified metric it means. Proposed by whoever asks, used once someone who did not propose it has accepted it, only in this workspace, and only for those who may read that metric.
+  fields:
+    - {name: phrase, type: data, required: true, in_list: true}
+    - {name: metric, type: data, required: true, in_list: true}
+    - {name: status, type: select, options: [Proposed, Accepted], default: Proposed, read_only: true, no_copy: true, in_list: true, in_filter: true}
+    - {name: proposed_by, type: email, read_only: true, no_copy: true, in_list: true}
+    - {name: accepted_by, type: email, read_only: true, no_copy: true}
+  actions:
+    - {name: accept, label: Accept It, permission: write, condition: "doc.status == 'Proposed'"}
+  list: {columns: [phrase, metric, status, proposed_by], sort: created_at desc}
