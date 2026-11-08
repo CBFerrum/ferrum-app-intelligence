@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+The app's summary fits the App Manager's 200 characters, so the app is listed there again; nothing else changed.
+
 ## 0.1.0
 
 The first release (Ferrum's Logic Platform v2, W7). Questions about certified metrics become typed requests
