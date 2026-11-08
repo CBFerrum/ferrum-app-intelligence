@@ -94,10 +94,17 @@ pub enum Understood {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProviderError(pub String);
 
+#[async_trait::async_trait]
 pub trait Provider: Send + Sync {
     /// What took the question to mean what it did, for the record.
     fn name(&self) -> &'static str;
-    fn understand(&self, question: &str, metrics: &[MetricInfo]) -> Result<Understood, ProviderError>;
+    async fn understand(&self, question: &str, metrics: &[MetricInfo]) -> Result<Understood, ProviderError>;
+    /// Asked again when what it understood cannot be used, with why (FLC-AI-005): at most twice more for one
+    /// question, within the question's time. One that cannot be asked again says so, and the question is declined.
+    async fn repair(&self, question: &str, metrics: &[MetricInfo], problem: &str) -> Result<Understood, ProviderError> {
+        let _ = (question, metrics, problem);
+        Err(ProviderError("it cannot be asked again".into()))
+    }
 }
 
 /// The rules: a metric is named by its name, a period by its word ("by month", "weekly", "over time"), a
@@ -154,12 +161,13 @@ fn periods_of(q: &str) -> Option<u64> {
     })
 }
 
+#[async_trait::async_trait]
 impl Provider for Rules {
     fn name(&self) -> &'static str {
         "rules"
     }
 
-    fn understand(&self, question: &str, metrics: &[MetricInfo]) -> Result<Understood, ProviderError> {
+    async fn understand(&self, question: &str, metrics: &[MetricInfo]) -> Result<Understood, ProviderError> {
         let q = question.to_lowercase();
         let ignored: Vec<String> = ACTIONS.iter().filter(|a| q.contains(**a)).map(|a| a.to_string()).collect();
         // A metric named in full; of several, the longest that holds the others ("average company terms"
@@ -231,7 +239,7 @@ mod tests {
     }
 
     fn intent(q: &str, metrics: &[MetricInfo]) -> Understood {
-        Rules.understand(q, metrics).unwrap()
+        tokio::runtime::Builder::new_current_thread().build().unwrap().block_on(Rules.understand(q, metrics)).unwrap()
     }
 
     #[test]
