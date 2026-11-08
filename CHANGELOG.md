@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+
+- **Stale data is said (FLC-SEM-007).** When Metrics reads a value from external datasets older than their sources allow, the answer carries those datasets in its evidence and says, in its `limits`, that it may not be today's figure.
+- The README has its changelog, as the platform's app contract asks.
+
 ## 0.2.0
 
 - **Bounded (FLC-AI-005).** A provider naming a metric the asker cannot read is told why and asked again, at most three times, then the question is declined. A question takes at most 20 seconds, understanding and reading together; past that it stops and reads nothing more.

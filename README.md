@@ -21,7 +21,8 @@ draft processes someone else reviews.
 - **The plan first, then the answer, then the evidence.** The answer is read through Metrics' own endpoint
   with the asker's rights, so two people may get two numbers from one question. It carries who certified the
   metric and when, its definition's fingerprint, its lineage, and when it was worked out; a series marks the
-  period not yet over as partial.
+  period not yet over as partial. A value Metrics read from external data older than its source allows
+  carries those datasets in its evidence and says, in its `limits`, that it may not be today's figure.
 - **Not sure, it asks; cannot, it says.** Two metrics a question could mean are offered back; a question
   naming no metric the asker can read, a range too long to read as asked, a metric deprecated since or one
   without a value now is declined with the reason. An honest abstention is an answer.
@@ -46,3 +47,12 @@ nothing is guessed.
 `tests/evals_it.rs` runs fixed questions (values, per-person rights, series) and adversarial ones (injected
 instructions, actions asked for, ranges too long, ambiguity, metrics hidden or revoked, a part of a composed
 metric gone, a failing provider, readers without the role) against a real database.
+
+## Changelog
+
+| Version | Highlights |
+|---|---|
+| **0.2.1** | An answer read from external data older than its source allows says so (`limits`, and the datasets in its evidence). |
+| **0.2.0** | A bounded understanding loop, providers evaluated before they answer, examples accepted by someone else, and old answers that say so. |
+| **0.1.1** | The summary fits the App Manager's 200 characters. |
+| **0.1.0** | Questions about certified metrics answered with the asker's own rights, with the plan and the evidence. |
