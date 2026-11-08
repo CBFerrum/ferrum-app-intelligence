@@ -4,13 +4,15 @@
 //! that ask for actions noticed and never obeyed, a failing provider guessing nothing, and proposals that
 //! become drafts someone else reviews. Against a real PostgreSQL (`FERRUM_INTELLIGENCE_TEST_DATABASE_URL`).
 
-use ferrum_app_intelligence::{MetricInfo, Provider, ProviderError, Understood};
+use ferrum_app_intelligence::{Intent, MAX_TRIES, MetricInfo, Provider, ProviderError, Rules, Understood, ask_within, choose, evaluate};
 use ferrum_kernel::secret::SecretKey;
 use ferrum_kernel::tenant::NewTenant;
 use ferrum_kernel::{Ctx, Db, DbConfig, Doc, Error, HookRegistry, Kernel, KernelSettings, ListQuery};
 use ferrum_meta::Catalog;
 use serde_json::{Value, json};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 fn obj(v: Value) -> Doc {
@@ -40,12 +42,87 @@ async fn ask(k: &Kernel, who: &Ctx, q: &str) -> Value {
 /// A model that times out, refuses or talks nonsense.
 struct Broken;
 
+#[async_trait::async_trait]
 impl Provider for Broken {
     fn name(&self) -> &'static str {
         "broken"
     }
-    fn understand(&self, _: &str, _: &[MetricInfo]) -> Result<Understood, ProviderError> {
+    async fn understand(&self, _: &str, _: &[MetricInfo]) -> Result<Understood, ProviderError> {
         Err(ProviderError("the model did not answer in time".into()))
+    }
+}
+
+/// A model that names a metric that is not there, however often it is told so.
+struct Hallucinates(AtomicUsize);
+
+#[async_trait::async_trait]
+impl Provider for Hallucinates {
+    fn name(&self) -> &'static str {
+        "hallucinates"
+    }
+    async fn understand(&self, _: &str, _: &[MetricInfo]) -> Result<Understood, ProviderError> {
+        self.0.fetch_add(1, Ordering::SeqCst);
+        Ok(Understood::Intent { intent: Intent::Value { metric: "Profit forecast".into() }, ignored: vec![] })
+    }
+    async fn repair(&self, question: &str, metrics: &[MetricInfo], _: &str) -> Result<Understood, ProviderError> {
+        self.understand(question, metrics).await
+    }
+}
+
+/// A model wrong once, and right once told why.
+struct Repairs;
+
+#[async_trait::async_trait]
+impl Provider for Repairs {
+    fn name(&self) -> &'static str {
+        "repairs"
+    }
+    async fn understand(&self, _: &str, _: &[MetricInfo]) -> Result<Understood, ProviderError> {
+        Ok(Understood::Intent { intent: Intent::Value { metric: "Company term".into() }, ignored: vec![] })
+    }
+    async fn repair(&self, _: &str, _: &[MetricInfo], problem: &str) -> Result<Understood, ProviderError> {
+        assert!(problem.contains("Company term"), "told what was wrong: {problem}");
+        Ok(Understood::Intent { intent: Intent::Value { metric: "Company terms".into() }, ignored: vec![] })
+    }
+}
+
+/// A model that takes longer than a question may.
+struct Slow;
+
+#[async_trait::async_trait]
+impl Provider for Slow {
+    fn name(&self) -> &'static str {
+        "slow"
+    }
+    async fn understand(&self, _: &str, _: &[MetricInfo]) -> Result<Understood, ProviderError> {
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        Ok(Understood::Decline { reason: "too late".into() })
+    }
+}
+
+/// A model that answers every question confidently, and wrongly: always the first metric it is shown.
+struct ConfidentlyWrong;
+
+#[async_trait::async_trait]
+impl Provider for ConfidentlyWrong {
+    fn name(&self) -> &'static str {
+        "confidently-wrong"
+    }
+    async fn understand(&self, _: &str, metrics: &[MetricInfo]) -> Result<Understood, ProviderError> {
+        Ok(Understood::Intent { intent: Intent::Value { metric: metrics[0].name.clone() }, ignored: vec![] })
+    }
+}
+
+/// A model as good as the rules, under its own name.
+struct AsGood;
+
+#[async_trait::async_trait]
+impl Provider for AsGood {
+    fn name(&self) -> &'static str {
+        "as-good"
+    }
+    async fn understand(&self, question: &str, metrics: &[MetricInfo]) -> Result<Understood, ProviderError> {
+        Rules.understand(question, metrics).await
     }
 }
 
@@ -204,4 +281,105 @@ async fn scenario() {
     assert!(matches!(call(&k, &admin, "POST", "/propose", json!({"metric": "Nowhere"})).await, Err(Error::Validation(_))));
     let drafts = k.logic_drafts(&admin).await.unwrap();
     assert_eq!(drafts.len(), 1, "a draft, nothing released or running: {drafts:?}");
+
+    // ───────────── budgets (FLC-AI-005) ─────────────
+    // A model naming what is not there is told why and asked again, at most three times in all, then the question is
+    // declined; one wrong once and right once told is answered; one slower than a question may be is stopped there.
+    let wrong = Hallucinates(AtomicUsize::new(0));
+    let gave_up = ferrum_app_intelligence::ask_with(&k, &director, &wrong, "What is the profit forecast?").await.unwrap();
+    assert!(gave_up["status"] == "declined" && gave_up["reason"].as_str().unwrap().contains("after 3 tries"), "{gave_up}");
+    assert_eq!(wrong.0.load(Ordering::SeqCst), MAX_TRIES, "asked no more than that");
+    let repaired = ferrum_app_intelligence::ask_with(&k, &director, &Repairs, "company terms please").await.unwrap();
+    assert_eq!(repaired["status"], "answered", "told why, it put itself right: {repaired}");
+    let started = Instant::now();
+    let late = ask_within(&k, &director, &Slow, "Company terms", Duration::from_secs(1)).await.unwrap();
+    assert!(late["status"] == "declined" && late["reason"].as_str().unwrap().contains("within 1 s"), "{late}");
+    assert!(started.elapsed() < Duration::from_secs(5), "stopped at its budget, not at the model's leisure");
+
+    // ───────────── a model change (FLC-AI-008) ─────────────
+    // Every provider is held to the same fixed and adversarial set; one that answers confidently and wrongly fails it,
+    // and the rules go on answering. Only one that passes is put in front of anyone.
+    let rules = evaluate(&Rules).await;
+    assert!(rules.qualifies(), "{:?}", rules.failed);
+    let liar = evaluate(&ConfidentlyWrong).await;
+    assert!(!liar.qualifies() && liar.failed.len() >= 3, "{:?}", liar.failed);
+    assert_eq!(choose(&ConfidentlyWrong, &liar).name(), "rules", "a model that failed is not promoted");
+    let good = evaluate(&AsGood).await;
+    assert_eq!(choose(&AsGood, &good).name(), "as-good", "one that passed may answer");
+    assert_eq!(choose(&ConfidentlyWrong, &good).name(), "rules", "another's pass is not its own");
+
+    // ───────────── examples (FLC-AI-007) ─────────────
+    // People propose what a phrase means here; it is used once someone other than its proposer accepts it, only for those
+    // who may read the metric it means, and only in this workspace.
+    let curator = user("curator@asks.test", &["Intelligence Steward", "Intelligence User", "Metric Reader"]).await;
+    let curator2 = user("curator2@asks.test", &["Intelligence Steward", "Intelligence User", "Metric Reader"]).await;
+    let propose = |who: Ctx, phrase: &'static str, metric: &'static str| {
+        let k = k.clone();
+        async move { call(&k, &who, "POST", "/feedback", json!({"phrase": phrase, "metric": metric})).await }
+    };
+    let people = propose(rep.clone(), "people who buy from us", "Customers (people)").await.unwrap();
+    let before = ask(&k, &director, "how many people who buy from us").await;
+    assert_ne!(before["status"], "answered", "proposed is not used: {before}");
+    let own = propose(curator2.clone(), "firms we sell to", "Customers (companies)").await.unwrap();
+    let own_id: Uuid = own["id"].as_str().unwrap().parse().unwrap();
+    assert!(matches!(call(&k, &curator2, "POST", &format!("/examples/{own_id}/accept"), Value::Null).await, Err(Error::Forbidden(_))), "never one's own");
+    let people_id: Uuid = people["id"].as_str().unwrap().parse().unwrap();
+    assert!(call(&k, &rep, "POST", &format!("/examples/{people_id}/accept"), Value::Null).await.is_err(), "nor by one who reviews nothing");
+    call(&k, &curator, "POST", &format!("/examples/{people_id}/accept"), Value::Null).await.unwrap();
+    let after = ask(&k, &director, "how many people who buy from us").await;
+    let direct = ask(&k, &director, "what is Customers (people)").await;
+    assert_eq!((after["status"].as_str(), &after["result"]), (Some("answered"), &direct["result"]), "{after}");
+    assert!(after["examples_used"][0].as_str().unwrap().contains("Customers (people)"), "{after}");
+    // A malicious example cannot widen what anyone reads: accepted, it still reaches only what its asker may read.
+    let vault = propose(rep.clone(), "the vault code", "Secret draft").await.unwrap();
+    call(&k, &curator, "POST", &format!("/examples/{}/accept", vault["id"].as_str().unwrap()), Value::Null).await.unwrap();
+    let probed = ask(&k, &rep, "what is the vault code").await;
+    assert_ne!(probed["status"], "answered", "{probed}");
+    assert!(probed.get("examples_used").is_none(), "an example to what the asker cannot read is not used: {probed}");
+    // Another workspace has none of this workspace's examples.
+    let other = k
+        .create_tenant(NewTenant {
+            slug: "elsewhere".into(),
+            name: "Elsewhere".into(),
+            admin_email: "admin@elsewhere.test".into(),
+            admin_password: "Correct-Horse-9".into(),
+            admin_name: None,
+            packages: vec!["intelligence".into(), "metrics".into(), "parties".into()],
+            settings: None,
+        })
+        .await
+        .expect("another workspace");
+    let s2 = k.login("elsewhere", "admin@elsewhere.test", "Correct-Horse-9").await.unwrap();
+    let elsewhere = k.load_ctx(other, s2.user, Some(s2.token_version), "it".into()).await.unwrap();
+    assert!(k.list(&elsewhere, "Example", &ListQuery::default()).await.unwrap().rows.is_empty(), "examples are their workspace's");
+
+    // ───────────── an old answer says when it no longer stands (FLC-SEM-009) ─────────────
+    let first = ask(&k, &director, "what is Customers (companies)").await;
+    assert_eq!(first["status"], "answered", "{first}");
+    let page = k
+        .list(&author, "Metric", &ListQuery { filters: vec![ferrum_kernel::Filter::eq("metric_name", "Customers (companies)")], ..Default::default() })
+        .await
+        .unwrap();
+    let companies_id: Uuid = page.rows[0]["id"].as_str().unwrap().parse().unwrap();
+    let narrower = json!({"definition": {"entity": "Customer", "filters": [["customer_type", "eq", "Company"], ["payment_terms_days", "gt", 30]], "measures": [{"fn": "count"}]}});
+    k.update(&author, "Metric", companies_id, obj(narrower), None).await.unwrap();
+    let stale_of = |listed: &Value| -> Option<String> {
+        listed["questions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|q| q["question"] == "what is Customers (companies)")
+            .and_then(|q| q["stale"].as_str().map(str::to_string))
+    };
+    let redrafted = call(&k, &director, "GET", "/questions", Value::Null).await.unwrap();
+    assert!(stale_of(&redrafted).is_some_and(|w| w.contains("not certified as it was")), "{redrafted}");
+    k.run_action(&steward, "Metric", companies_id, "certify", Value::Null).await.unwrap();
+    let recertified = call(&k, &director, "GET", "/questions", Value::Null).await.unwrap();
+    assert!(stale_of(&recertified).is_some_and(|w| w.contains("earlier certified definition")), "{recertified}");
+    assert_eq!(ask(&k, &director, "what is Customers (companies)").await["status"], "answered");
+    let listed = call(&k, &director, "GET", "/questions", Value::Null).await.unwrap();
+    let both: Vec<&Value> = listed["questions"].as_array().unwrap().iter().filter(|q| q["question"] == "what is Customers (companies)").collect();
+    assert_eq!(both.len(), 2, "{listed}");
+    assert!(both[0].get("stale").is_none(), "asked again, today's answer stands: {listed}");
+    assert!(both[1]["stale"].is_string(), "and the earlier one still says it was answered under another definition: {listed}");
 }

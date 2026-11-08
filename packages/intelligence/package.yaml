@@ -9,13 +9,18 @@ modules:
     label: Intelligence
     icon: sparkles
     order: 63
-    items: [Question]
+    items: [Question, Example]
 
 roles:
   - name: Intelligence User
     description: Asks about the certified metrics they may read, and sees the questions they asked.
     permissions:
       - {entity: Question, read: true, if_owner: true}
+      - {entity: Example, read: true, create: true, if_owner: true}
+  - name: Intelligence Steward
+    description: Reviews the examples people propose, and accepts those that say what a phrase means here. Never their own.
+    permissions:
+      - {entity: Example, read: true, write: true}
 
 personal_data:
   - {entity: Question, match: asked_by, erase: [question, answer, plan, reason]}
