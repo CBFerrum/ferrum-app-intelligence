@@ -1,0 +1,14 @@
+id: intelligence
+name: Intelligence
+version: 0.1.0
+publisher: cbferrum
+summary: "Ask about certified metrics in plain words: answered with your own rights, with the plan it followed and the evidence behind it, a question back when it is not sure, and a plain no when it cannot; proposals become ordinary reviewed processes"
+description: README.md
+categories: [analytics]
+license: AGPL-3.0-only
+homepage: https://github.com/CBFerrum/ferrum-app-intelligence
+support: https://github.com/CBFerrum/ferrum-app-intelligence/issues
+runtime: native
+platform: ">=0.3.2, <0.4"
+packages: [intelligence]
+uninstall: ask
