@@ -52,6 +52,7 @@ metric gone, a failing provider, readers without the role) against a real databa
 
 | Version | Highlights |
 |---|---|
+| **0.2.2** | The app has an icon in the launcher and the bar. |
 | **0.2.1** | An answer read from external data older than its source allows says so (`limits`, and the datasets in its evidence). |
 | **0.2.0** | A bounded understanding loop, providers evaluated before they answer, examples accepted by someone else, and old answers that say so. |
 | **0.1.1** | The summary fits the App Manager's 200 characters. |
