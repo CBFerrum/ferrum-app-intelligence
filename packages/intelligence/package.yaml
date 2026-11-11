@@ -7,7 +7,7 @@ depends: [core, metrics]
 modules:
   - name: intelligence
     label: Intelligence
-    icon: sparkles
+    icon: circle-help
     order: 63
     items: [Question, Example]
 
