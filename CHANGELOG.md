@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- The app has an icon (`circle-help`) in the launcher, the home grid and the bar, where it showed a letter. Nothing else changed.
+
 ## 0.2.1
 
 - **Stale data is said (FLC-SEM-007).** When Metrics reads a value from external datasets older than their sources allow, the answer carries those datasets in its evidence and says, in its `limits`, that it may not be today's figure.
