@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.3
+
+Needs the same platform as 0.2.2. No database change, no change to the app: its test suite opens the vault as a server does before booting the kernel, and no longer gives the kernel the old master key.
+
 ## 0.2.2
 
 - The app has an icon (`circle-help`) in the launcher, the home grid and the bar, where it showed a letter. Nothing else changed.
