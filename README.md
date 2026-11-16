@@ -7,7 +7,7 @@
 
 <br>
 
-[![Version](https://img.shields.io/badge/version-0.2.2-6d28d9?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.3-6d28d9?style=flat-square)](CHANGELOG.md)
 [![Licence: AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue?style=flat-square)](LICENSE)
 [![Ferrum platform](https://img.shields.io/badge/runs%20on-Ferrum-2f5bea?style=flat-square)](https://github.com/CBFerrum/Ferrum)
 ![Rust](https://img.shields.io/badge/Rust-server-b7410e?style=flat-square&logo=rust)
@@ -36,7 +36,7 @@ Intelligence turns a question such as "average company terms by month for the la
 
 | | |
 |---|---|
-| **Version** | 0.2.2 |
+| **Version** | 0.2.3 |
 | **Kind** | Records screens plus HTTP endpoints. It has no `shell.app` entry and no interface of its own: it appears as the Intelligence module (a home with recent questions, Questions and Examples) in Ferrum's records screens at `/data/intelligence/`, with an icon in the launcher and the bar. |
 | **What it adds** | 2 entities (Question, Example), 2 roles, 1 module, 5 endpoints, no reports, no print formats, no scheduled jobs |
 | **Depends on** | Ferrum platform `>=0.3.2, <0.4`; the `metrics` package (Ferrum Metrics) |
@@ -292,6 +292,7 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 
 ### ✅ Recently shipped
 
+- [x] **0.2.3** The test suite opens the vault as a server does and no longer names the old master key. No change to the app.
 - [x] **0.2.2** The app has an icon in the launcher and the bar.
 - [x] **0.2.1** An answer read from stale external data says so, in its `limits` and its evidence.
 - [x] **0.2.0** A bounded understanding loop (3 tries, 20 seconds), providers evaluated before they answer, examples accepted by someone else, old answers that say so.
@@ -360,7 +361,7 @@ docs/PROVENANCE.md               where the design comes from
 
 ## 📜 Changelog
 
-Every release is in [CHANGELOG.md](CHANGELOG.md). The latest is **0.2.2**: the app has an icon in the launcher and the bar.
+Every release is in [CHANGELOG.md](CHANGELOG.md). The latest is **0.2.3**: its test suite no longer names the old master key; nothing else changed.
 
 ## 🤝 Contributing
 
