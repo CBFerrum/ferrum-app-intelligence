@@ -292,7 +292,6 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 
 ### ✅ Recently shipped
 
-- [x] **0.2.3** The test suite opens the vault as a server does and no longer names the old master key. No change to the app.
 - [x] **0.2.2** The app has an icon in the launcher and the bar.
 - [x] **0.2.1** An answer read from stale external data says so, in its `limits` and its evidence.
 - [x] **0.2.0** A bounded understanding loop (3 tries, 20 seconds), providers evaluated before they answer, examples accepted by someone else, old answers that say so.
@@ -361,7 +360,7 @@ docs/PROVENANCE.md               where the design comes from
 
 ## 📜 Changelog
 
-Every release is in [CHANGELOG.md](CHANGELOG.md). The latest is **0.2.3**: its test suite no longer names the old master key; nothing else changed.
+Every release is described in [CHANGELOG.md](CHANGELOG.md).
 
 ## 🤝 Contributing
 
