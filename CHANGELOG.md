@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.4
+
+Needs the same platform as 0.2.3. No database change, no interface change.
+
+- A proposal's description says it was proposed on the workspace's day; it named the UTC day, so east or west of UTC it
+  named yesterday or tomorrow for part of every day.
+
 ## 0.2.3
 
 Needs the same platform as 0.2.2. No database change, no change to the app: its test suite opens the vault as a server does before booting the kernel, and no longer gives the kernel the old master key.
