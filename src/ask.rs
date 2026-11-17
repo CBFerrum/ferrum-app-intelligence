@@ -4,7 +4,6 @@
 //! it cannot answer: an honest abstention is an answer. Every question is kept, for the person who asked.
 
 use crate::intent::{Intent, MAX_QUESTION, MetricInfo, Provider, ProviderError, Understood};
-use chrono::Utc;
 use ferrum_domain::util::elevated;
 use ferrum_kernel::{Ctx, Doc, DocHook, Error, Filter, HookCtx, Kernel, ListQuery, Result, SiteRequest};
 use serde_json::{Map, Value, json};
@@ -299,7 +298,7 @@ pub async fn propose(k: &Kernel, ctx: &Ctx, metric: &str, why: &str) -> Result<V
     let source = json!({
         "schema_version": "ferrum.solution/1", "kind": "Solution", "id": id, "version": "0.1.0",
         "label": format!("Look into {metric}"), "requires": [],
-        "description": format!("Proposed from Intelligence by {} on {}: {why}", ctx.email, Utc::now().date_naive()),
+        "description": format!("Proposed from Intelligence by {} on {}: {why}", ctx.email, ctx.today()),
         "processes": [{
             "id": "look_into", "label": format!("Look into {metric}"),
             "trigger": {"event": "", "business_key": "trigger.id"}, "entry": "look", "max_steps": 20,
