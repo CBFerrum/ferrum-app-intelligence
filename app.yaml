@@ -1,6 +1,6 @@
 id: intelligence
 name: Intelligence
-version: 0.2.4
+version: 0.3.0
 publisher: cbferrum
 summary: "Ask about certified metrics in plain words: answered with your own rights, the plan and the evidence shown, a question back when unsure, a plain no when it cannot"
 description: README.md
@@ -9,6 +9,6 @@ license: AGPL-3.0-only
 homepage: https://github.com/CBFerrum/ferrum-app-intelligence
 support: https://github.com/CBFerrum/ferrum-app-intelligence/issues
 runtime: native
-platform: ">=0.3.2, <0.4"
+platform: ">=0.4.0, <0.5"
 packages: [intelligence]
 uninstall: ask
