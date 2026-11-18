@@ -46,8 +46,8 @@ pub fn reports() -> Vec<Arc<dyn ReportSource>> {
     vec![]
 }
 
-/// Upkeep: none yet.
-pub async fn maintenance(_k: &Kernel) -> Result<()> {
+/// One workspace's upkeep, which the platform runs where Intelligence is installed: none yet.
+pub async fn maintenance(_k: &Kernel, _tenant: uuid::Uuid) -> Result<()> {
     Ok(())
 }
 

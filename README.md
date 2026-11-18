@@ -7,7 +7,7 @@
 
 <br>
 
-[![Version](https://img.shields.io/badge/version-0.2.4-6d28d9?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0-6d28d9?style=flat-square)](CHANGELOG.md)
 [![Licence: AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue?style=flat-square)](LICENSE)
 [![Ferrum platform](https://img.shields.io/badge/runs%20on-Ferrum-2f5bea?style=flat-square)](https://github.com/CBFerrum/Ferrum)
 ![Rust](https://img.shields.io/badge/Rust-server-b7410e?style=flat-square&logo=rust)
@@ -36,10 +36,10 @@ Intelligence turns a question such as "average company terms by month for the la
 
 | | |
 |---|---|
-| **Version** | 0.2.4 |
+| **Version** | 0.3.0 |
 | **Kind** | Records screens plus HTTP endpoints. It has no `shell.app` entry and no interface of its own: it appears as the Intelligence module (a home with recent questions, Questions and Examples) in Ferrum's records screens at `/data/intelligence/`, with an icon in the launcher and the bar. |
 | **What it adds** | 2 entities (Question, Example), 2 roles, 1 module, 5 endpoints, no reports, no print formats, no scheduled jobs |
-| **Depends on** | Ferrum platform `>=0.3.2, <0.4`; the `metrics` package (Ferrum Metrics) |
+| **Depends on** | Ferrum platform `>=0.4.0, <0.5`; the `metrics` package (Ferrum Metrics) |
 | **Works with** | Metrics (every answer), Studio's solution review (proposals), the Ferrum launcher and bar (it has an icon there) |
 | **Languages** | English. The app has no interface words of its own. Answers are written in English. |
 | **Tests** | 3 Rust tests: two unit tests and one evaluation run against a real PostgreSQL |
@@ -292,6 +292,7 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 
 ### ✅ Recently shipped
 
+- [x] **0.3.0** Upkeep runs one workspace at a time, on whichever replica is free; needs Ferrum 0.4.0.
 - [x] **0.2.4** A proposal's description names the workspace's day, not UTC's.
 - [x] **0.2.2** The app has an icon in the launcher and the bar.
 - [x] **0.2.1** An answer read from stale external data says so, in its `limits` and its evidence.
@@ -320,7 +321,7 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 
 ## 🚀 Install
 
-Intelligence is an app for the Ferrum platform (`>=0.3.2, <0.4`) and runs inside the Ferrum server as a native app.
+Intelligence is an app for the Ferrum platform (`>=0.4.0, <0.5`) and runs inside the Ferrum server as a native app.
 
 1. Install **Metrics** first. Intelligence needs it (`depends: [core, metrics]`).
 2. In Ferrum, open the **App Manager** (or the store) and install **Intelligence**. Self-hosters who build their own server image include it as a native app like the others.

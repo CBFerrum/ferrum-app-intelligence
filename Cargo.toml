@@ -15,12 +15,12 @@ async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 serde_json = "1"
 tokio = { version = "1.45", features = ["time"] }
+uuid = { version = "1.10", features = ["v4", "v7", "serde"] }
 
 [dev-dependencies]
 ferrum-app-metrics = { git = "https://github.com/CBFerrum/ferrum-app-metrics", branch = "main" }
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "uuid", "chrono", "rust_decimal", "json", "migrate", "macros"] }
 tokio = { version = "1.45", features = ["rt-multi-thread", "macros", "sync", "time", "signal"] }
-uuid = { version = "1.10", features = ["v4", "v7", "serde"] }
 
 [lints.clippy]
 type_complexity = "allow"
