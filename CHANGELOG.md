@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.1
+
+Needs the same platform as 0.4.0. No database change, no interface change.
+
+- **Intelligence's guide.** `app.yaml` contributes `shell.assistant`: how to answer a question about a figure here
+  (list the certified metrics, ask by creating a Question, read the outcome, the plan, the evidence and the limits;
+  never work a figure out from raw records; propose an Example). The assistant reads it in Intelligence's pages; Ferrum's
+  MCP server will serve it to agents as Intelligence's guide when its guides change lands.
+
 ## 0.4.0
 
 Needs the same platform as 0.3.2. No database migration. Package `intelligence` 0.3.0: Intelligence User may create a

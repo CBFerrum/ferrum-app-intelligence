@@ -7,7 +7,7 @@
 
 <br>
 
-[![Version](https://img.shields.io/badge/version-0.4.0-6d28d9?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.1-6d28d9?style=flat-square)](CHANGELOG.md)
 [![Licence: AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue?style=flat-square)](LICENSE)
 [![Ferrum platform](https://img.shields.io/badge/runs%20on-Ferrum-2f5bea?style=flat-square)](https://github.com/CBFerrum/Ferrum)
 ![Rust](https://img.shields.io/badge/Rust-server-b7410e?style=flat-square&logo=rust)
@@ -36,7 +36,7 @@ Intelligence turns a question such as "average company terms by month for the la
 
 | | |
 |---|---|
-| **Version** | 0.4.0 |
+| **Version** | 0.4.1 |
 | **Kind** | Records screens plus HTTP endpoints. It has no `shell.app` entry and no interface of its own: it appears as the Intelligence module (a home with recent questions, Questions and Examples) in Ferrum's records screens at `/data/intelligence/`, with an icon in the launcher and the bar. |
 | **What it adds** | 2 entities (Question, Example), 2 roles, 1 module, 5 endpoints, no reports, no print formats, no scheduled jobs |
 | **Depends on** | Ferrum platform `>=0.4.0, <0.5`; the `metrics` package (Ferrum Metrics) |
@@ -250,6 +250,7 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 | Ask a question in plain words | 🟡¹ | ✅ | ✅ | ✅ | 🟡² |
 | Free-form questions over any table | ❌ | ✅ | ✅ | ✅ | 🟡² |
 | A language model understands the question | ❌³ | ✅ | ✅ | ✅ | 🟡² |
+| Works with your own AI agent (MCP) | ✅¹³ | 🟡⁷ | 🟡⁷ | 🟡⁷ | 🟡⁷ |
 | Answers only from certified definitions | ✅ | 🟡⁴ | 🟡⁴ | 🟡⁴ | 🟡⁴ |
 | Evidence on each answer (certifier, definition fingerprint, lineage) | ✅ | 🟡⁵ | 🟡⁵ | 🟡⁵ | 🟡⁵ |
 | Each person's own row rights apply to the answer | ✅ | ✅ | 🟡⁶ | ✅ | 🟡⁶ |
@@ -258,7 +259,7 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 | Teach it your phrases, accepted by a second person | ✅ | ✅ | 🟡⁷ | ✅ | ❌ |
 | Group or filter by a dimension in the question | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Compare periods, ratios, top N | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Follow-up questions in one conversation | ❌ | ✅ | ✅ | ✅ | 🟡² |
+| Follow-up questions in one conversation | ❌¹⁴ | ✅ | ✅ | ✅ | 🟡² |
 | Charts in the answer | 🟡⁸ | ✅ | ✅ | ✅ | ✅ |
 | Dashboards | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Alerts and subscriptions on figures | 🟡⁹ | ✅ | ✅ | ✅ | ✅ |
@@ -268,7 +269,7 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 | Self-hosted, data never leaves your server | ✅ | 🟡¹² | 🟡¹² | 🟡¹² | ✅ |
 | Question history kept for the asker | ✅ | 🟡⁷ | 🟡⁷ | 🟡⁷ | 🟡⁷ |
 
-<sub>¹ Rules only: a metric by name, a period by word, a stretch by number. ² Metabase's question features and any AI assistant depend on the edition. ³ A provider is a plug-in point; none is configured. ⁴ Each has a way to define and endorse shared measures or models; whether an answer is limited to them depends on setup. ⁵ Lineage and endorsement exist in separate views; we could not confirm they are attached to each answer. ⁶ Depends on edition and setup. ⁷ Not confirmed. ⁸ A series answer carries chart data; no chart screen ships. ⁹ Through Ferrum Metrics: people follow a metric and get a digest. ¹⁰ Only what Metrics reads: Ferrum's records and the external datasets Metrics' engine serves. ¹¹ Works in a mobile browser; we are not sure of a native app. ¹² Some on-premises versions exist, and their AI features may differ from the cloud ones.</sub>
+<sub>¹ Rules only: a metric by name, a period by word, a stretch by number. ² Metabase's question features and any AI assistant depend on the edition. ³ No model runs inside Ferrum, by design; a provider is a plug-in point and none is configured. What a model would do here, your own agent does over MCP (¹³). ⁴ Each has a way to define and endorse shared measures or models; whether an answer is limited to them depends on setup. ⁵ Lineage and endorsement exist in separate views; we could not confirm they are attached to each answer. ⁶ Depends on edition and setup. ⁷ Not confirmed. ⁸ A series answer carries chart data; no chart screen ships. ⁹ Through Ferrum Metrics: people follow a metric and get a digest. ¹⁰ Only what Metrics reads: Ferrum's records and the external datasets Metrics' engine serves. ¹¹ Works in a mobile browser; we are not sure of a native app. ¹² Some on-premises versions exist, and their AI features may differ from the cloud ones. ¹³ An agent connected to Ferrum over MCP, with its person's rights, lists the certified metrics, asks by creating a Question (`intelligence.question.create`, the same operation the screen uses; `tests/asks_it.rs`), proposes Examples, and accepts them where it holds Intelligence Steward (`intelligence.example.accept`, with its contract). Intelligence's guide (`app.yaml`, `shell.assistant`) says how; Ferrum's assistant reads it today, and Ferrum's MCP server will serve it to agents as the app's guide when its guides change lands. ¹⁴ Each question stands alone here; an agent keeps the conversation itself and asks each turn as a new Question.</sub>
 
 ### 🏆 Where Intelligence stands out
 
@@ -293,6 +294,7 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 
 ### ✅ Recently shipped
 
+- [x] **0.4.1** Intelligence's guide: how an agent, or the assistant, answers a question about a figure here.
 - [x] **0.4.0** Asking is one operation, `intelligence.question.create`, for a person's screen and an agent alike; it needs Intelligence User.
 - [x] **0.3.2** Accept It says what it does, what it returns and what done means, for processes and agents.
 - [x] **0.3.1** A question with letters such as "İ" no longer stops the answer; erasure reaches every address the app keeps.
@@ -307,9 +309,7 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 ### 🔜 Next up
 
 - [ ] **A screen to ask in.** Today you ask over HTTP. A question box with the plan, the answer, the chart and the evidence, in Ferrum's own interface, is the first thing a person expects.
-- [ ] **A model provider** behind the existing trait, held to the evaluation set. It waits for a model key and a decision about where the model runs.
 - [ ] **Group by and filter by a dimension**, where a metric's definition allows it.
-- [ ] **Follow-up questions** that keep what the last one was about.
 - [ ] **Charts drawn from the answer's chart data**, in the screen above.
 - [ ] **A CI workflow** for this repository, with its test database, as the other Ferrum apps have.
 
@@ -318,7 +318,6 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 - [ ] **Understanding**: synonyms and word forms beyond exact names; several metrics in one question; comparing two periods.
 - [ ] **Explaining a change**: what moved a number between two periods, using Metrics' lineage.
 - [ ] **Proactive**: a question asked on a schedule and delivered, through Metrics' followed-metric digests.
-- [ ] **In Ferrum's assistant**: offer this as a source for the assistant's answers about figures.
 - [ ] **Evaluation in the open**: publish the fixed and adversarial question set as a document, with results per provider.
 - [ ] **More languages** for questions and answers.
 - [ ] **Feedback on an answer** (right, wrong, not what I meant), kept for the steward.

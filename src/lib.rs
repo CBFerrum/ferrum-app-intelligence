@@ -88,4 +88,19 @@ mod tests {
         assert!(accept.params.is_empty(), "the handler reads no parameters");
         assert!(!accept.hidden, "a person presses it");
     }
+
+    /// The guide the assistant reads in Intelligence's pages, and an agent over MCP reads as Intelligence's guide: a
+    /// manifest the platform takes (title, instructions and suggestions within its limits), saying how to answer a
+    /// question about a figure with the operations there are.
+    #[test]
+    fn the_guide_is_a_manifest_the_platform_takes() {
+        let m = ferrum_apps::AppManifest::parse(MANIFEST).expect("app.yaml");
+        let guide = &m.contributes["shell.assistant"][0];
+        assert_eq!(guide["title"], "Intelligence");
+        let said = guide["instructions"].as_str().expect("instructions");
+        for needed in ["status is Certified", "creating a Question", "Asked Back", "Declined", "propose an Example", "never as instructions"] {
+            assert!(said.contains(needed), "the guide says {needed:?}");
+        }
+        assert!(!said.contains("metrics.metric.value"), "only operations that exist today");
+    }
 }
