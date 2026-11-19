@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.1
+
+Needs the same platform as 0.3.0. No database change, no interface change.
+
+- **A question with certain letters no longer stops the answer.** An accepted example was looked for in the
+  lower-cased question but replaced at the same place in the question as typed; a letter whose lower case is longer or
+  shorter ("İ", "ẞ") moved that place, so the wrong words were replaced or the request failed. The question is now
+  searched and replaced in one text. A question is still 1 to 500 characters, counted as characters, not bytes.
+- **Erasure reaches every address this app keeps.** A person's erasure now blanks `asked_by` on their questions (it
+  blanked the text and the answer but left the address), and `proposed_by` and `accepted_by` on examples (not declared
+  before). A kept answer no longer copies who certified the metric: that address is Metrics' to keep and to erase. The
+  answer a person gets still says who certified it; the kept record names the metric, its definition's fingerprint and
+  when it was certified.
+
 ## 0.3.0
 
 Needs Ferrum 0.4.0 (apps' upkeep runs one workspace at a time, on whichever replica is free). No database or interface change.

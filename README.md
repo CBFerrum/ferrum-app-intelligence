@@ -7,7 +7,7 @@
 
 <br>
 
-[![Version](https://img.shields.io/badge/version-0.3.0-6d28d9?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.1-6d28d9?style=flat-square)](CHANGELOG.md)
 [![Licence: AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue?style=flat-square)](LICENSE)
 [![Ferrum platform](https://img.shields.io/badge/runs%20on-Ferrum-2f5bea?style=flat-square)](https://github.com/CBFerrum/Ferrum)
 ![Rust](https://img.shields.io/badge/Rust-server-b7410e?style=flat-square&logo=rust)
@@ -36,7 +36,7 @@ Intelligence turns a question such as "average company terms by month for the la
 
 | | |
 |---|---|
-| **Version** | 0.3.0 |
+| **Version** | 0.3.1 |
 | **Kind** | Records screens plus HTTP endpoints. It has no `shell.app` entry and no interface of its own: it appears as the Intelligence module (a home with recent questions, Questions and Examples) in Ferrum's records screens at `/data/intelligence/`, with an icon in the launcher and the bar. |
 | **What it adds** | 2 entities (Question, Example), 2 roles, 1 module, 5 endpoints, no reports, no print formats, no scheduled jobs |
 | **Depends on** | Ferrum platform `>=0.4.0, <0.5`; the `metrics` package (Ferrum Metrics) |
@@ -65,7 +65,7 @@ Intelligence turns a question such as "average company terms by month for the la
 <tr>
 <td width="50%" valign="top">
 <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/screens/intelligence-question-detail-dark.webp"><img alt="Question — open record" src="docs/assets/screens/intelligence-question-detail-light.webp"></picture>
-<p><b>🧾 One question, with its evidence</b><br><sub>See what the question was taken to mean, the plan, and the answer with who certified the metric.</sub></p>
+<p><b>🧾 One question, with its evidence</b><br><sub>See what the question was taken to mean, the plan, and the answer with when its metric was certified and its definition's fingerprint.</sub></p>
 </td>
 <td width="50%"></td>
 </tr>
@@ -155,7 +155,7 @@ Words such as delete, remove, drop, update, insert, approve, deploy, activate, g
 ### 🗂️ Questions kept
 
 - **Question** records what was asked, by whom (`asked_by`), the outcome (Answered, Asked Back, Declined), what understood it (`rules`, or a model's name), the intent as JSON, the plan, the answer as JSON and the reason. They are read-only, owned by the asker, and listed newest first.
-- **Personal data.** A person's request reaches their questions by their address and erases the question text, answer, plan and reason.
+- **Personal data.** A person's erasure reaches their questions by their address and blanks the address, the question text, the answer, the plan and the reason; on examples it blanks `proposed_by` and `accepted_by` where they are that person. A kept answer does not copy who certified the metric (Metrics keeps and erases that); the answer a person gets still says it.
 
 ### 🎓 Teaching it your words
 
@@ -292,6 +292,7 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 
 ### ✅ Recently shipped
 
+- [x] **0.3.1** A question with letters such as "İ" no longer stops the answer; erasure reaches every address the app keeps.
 - [x] **0.3.0** Upkeep runs one workspace at a time, on whichever replica is free; needs Ferrum 0.4.0.
 - [x] **0.2.4** A proposal's description names the workspace's day, not UTC's.
 - [x] **0.2.2** The app has an icon in the launcher and the bar.

@@ -389,4 +389,31 @@ async fn scenario() {
     assert_eq!(both.len(), 2, "{listed}");
     assert!(both[0].get("stale").is_none(), "asked again, today's answer stands: {listed}");
     assert!(both[1]["stale"].is_string(), "and the earlier one still says it was answered under another definition: {listed}");
+
+    // ───────────── erasure: none of a person's address stays in questions or examples ─────────────
+    // The asker and proposer, the steward who accepted, and the one who certified the metrics the answers came from.
+    let all = ListQuery { limit: Some(1000), ..Default::default() };
+    let kept = |k: Arc<Kernel>, admin: Ctx| {
+        let all = all.clone();
+        async move {
+            let mut rows = k.list(&admin, "Question", &all).await.unwrap().rows;
+            rows.extend(k.list(&admin, "Example", &all).await.unwrap().rows);
+            Value::Array(rows.into_iter().map(Value::Object).collect()).to_string().to_lowercase()
+        }
+    };
+    let before = kept(k.clone(), admin.clone()).await;
+    let people = ["rep@asks.test", "curator@asks.test", "steward@asks.test"];
+    for who in &people[..2] {
+        assert!(before.contains(who), "{who} is named before the erasure, so the test can see it go");
+    }
+    // Who certified a metric is said in the answer a person gets (above), and never kept: it is Metrics' to erase.
+    assert!(!before.contains("steward@asks.test"), "a kept answer copies no certifier: {before}");
+    for who in people {
+        k.erase_personal_data(&admin, who, "Request 12").await.unwrap_or_else(|e| panic!("{who}: {e}"));
+    }
+    let after = kept(k.clone(), admin.clone()).await;
+    for who in people {
+        assert!(!after.contains(who), "{who} is still in a question or an example after the erasure: {after}");
+    }
+    assert!(after.contains("director@asks.test"), "someone else's questions stay");
 }

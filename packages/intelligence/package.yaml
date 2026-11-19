@@ -23,4 +23,6 @@ roles:
       - {entity: Example, read: true, write: true}
 
 personal_data:
-  - {entity: Question, match: asked_by, erase: [question, answer, plan, reason]}
+  - {entity: Question, match: asked_by, erase: [asked_by, question, answer, plan, reason]}
+  - {entity: Example, match: proposed_by, erase: [proposed_by]}
+  - {entity: Example, match: accepted_by, erase: [accepted_by]}
