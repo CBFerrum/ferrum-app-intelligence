@@ -7,7 +7,7 @@
 
 <br>
 
-[![Version](https://img.shields.io/badge/version-0.3.0-6d28d9?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.5.0-6d28d9?style=flat-square)](CHANGELOG.md)
 [![Licence: AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue?style=flat-square)](LICENSE)
 [![Ferrum platform](https://img.shields.io/badge/runs%20on-Ferrum-2f5bea?style=flat-square)](https://github.com/CBFerrum/Ferrum)
 ![Rust](https://img.shields.io/badge/Rust-server-b7410e?style=flat-square&logo=rust)
@@ -36,7 +36,7 @@ Intelligence turns a question such as "average company terms by month for the la
 
 | | |
 |---|---|
-| **Version** | 0.3.0 |
+| **Version** | 0.5.0 |
 | **Kind** | Records screens plus HTTP endpoints. It has no `shell.app` entry and no interface of its own: it appears as the Intelligence module (a home with recent questions, Questions and Examples) in Ferrum's records screens at `/data/intelligence/`, with an icon in the launcher and the bar. |
 | **What it adds** | 2 entities (Question, Example), 2 roles, 1 module, 5 endpoints, no reports, no print formats, no scheduled jobs |
 | **Depends on** | Ferrum platform `>=0.4.0, <0.5`; the `metrics` package (Ferrum Metrics) |
@@ -65,7 +65,7 @@ Intelligence turns a question such as "average company terms by month for the la
 <tr>
 <td width="50%" valign="top">
 <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/screens/intelligence-question-detail-dark.webp"><img alt="Question — open record" src="docs/assets/screens/intelligence-question-detail-light.webp"></picture>
-<p><b>🧾 One question, with its evidence</b><br><sub>See what the question was taken to mean, the plan, and the answer with who certified the metric.</sub></p>
+<p><b>🧾 One question, with its evidence</b><br><sub>See what the question was taken to mean, the plan, and the answer with when its metric was certified and its definition's fingerprint.</sub></p>
 </td>
 <td width="50%"></td>
 </tr>
@@ -110,12 +110,14 @@ Asking itself is an HTTP call (see Endpoints under Data model), so it is not in 
 
 ### 💬 Asking a question
 
-- **One endpoint to ask.** `POST /api/app/intelligence/ask` with `{"question": "…"}` returns an answer, a question back or a plain no. A question is 1 to 500 characters. The caller must be signed in.
-- **A typed request, never a query.** A question becomes a request about the certified metrics the asker may read, and only what Metrics can do with them: **a value**, or **a value period by period** (a series). Nothing in a question becomes a query, a filter or an action.
+- **Asking is one operation.** Asking is making a Question: `intelligence.question.create` with `{"values": {"question": "…"}}`, through Ferrum's gate with a receipt. A person's screen and an agent connected over MCP (`create_record` on Question, with an `idempotency_key`) make the same call and get the same answer, kept on the Question with its outcome, plan and evidence. Only the question is taken from the caller: everything else is worked out from it with the caller's own rights, and anything else sent is ignored. A question is 1 to 500 characters.
+- **The endpoint.** `POST /api/app/intelligence/ask` with `{"question": "…"}` asks through that operation and returns the answer: an answer, a question back or a plain no. An `Idempotency-Key` header (8 to 200 characters) makes a request sent twice keep one question.
+- **A typed request, never a query.** A question becomes a request about the certified metrics the asker may read, and only what Metrics can do with them: **a value**, **a value period by period** (a series), or **how it changed** between the last two complete periods. Nothing in a question becomes a query, a filter or an action.
 - **The plan is said first.** Before anything is read, the plan is written in words and kept with the answer (for example "Read the certified metric Invoiced sales, as it stands now, with your own rights to the records it counts").
 - **Series by period.** A series goes by day, week, month, quarter or year, over 1 to 120 periods; 12 when the question gives no number. A series answer also carries chart data (line chart: x, y, a flag for the period not yet over, and the unit). The period not yet over is marked partial.
+- **How it changed.** A question with a change word (change, compared, compare, vs, versus, growth, grew, difference, "than last") and a period, or a change word alone (by month), compares the last two complete periods of that metric's series: both values, the change and the change as a percent of the earlier one, to two places, worked out in exact decimals. The period not yet over is left out, and the plan says so. A percent of a change from zero is not given. A change word naming two metrics asks back which.
 - **A bounded question.** A question takes at most 20 seconds, understanding and reading together. Past that it stops and reads nothing more.
-- **Who may ask.** The asker needs a role that reads certified metrics (Metric Reader). Without it the answer is a refusal that says so.
+- **Who may ask.** The asker needs **Intelligence User** (to ask) and a role that reads certified metrics (**Metric Reader**). Without either, the answer is a refusal that says so, and nothing is kept. A figure the asker may not read is never given as a number, a count or a zero: a metric they cannot read is not there to answer from, and one over records they cannot read is refused with Metrics' reason.
 
 ### 🧠 Understanding the question
 
@@ -155,7 +157,7 @@ Words such as delete, remove, drop, update, insert, approve, deploy, activate, g
 ### 🗂️ Questions kept
 
 - **Question** records what was asked, by whom (`asked_by`), the outcome (Answered, Asked Back, Declined), what understood it (`rules`, or a model's name), the intent as JSON, the plan, the answer as JSON and the reason. They are read-only, owned by the asker, and listed newest first.
-- **Personal data.** A person's request reaches their questions by their address and erases the question text, answer, plan and reason.
+- **Personal data.** A person's erasure reaches their questions by their address and blanks the address, the question text, the answer, the plan and the reason; on examples it blanks `proposed_by` and `accepted_by` where they are that person. A kept answer does not copy who certified the metric (Metrics keeps and erases that); the answer a person gets still says it.
 
 ### 🎓 Teaching it your words
 
@@ -172,7 +174,7 @@ Words such as delete, remove, drop, update, insert, approve, deploy, activate, g
 
 | Role | What it can do |
 |---|---|
-| **Intelligence User** | Asks about the certified metrics they may read, reads their own Questions, proposes and reads their own Examples |
+| **Intelligence User** | Asks (with Metric Reader) about the certified metrics they may read, reads their own Questions, proposes and reads their own Examples |
 | **Intelligence Steward** | Reads and changes Examples, and accepts those that say what a phrase means here, never their own |
 
 Both are used with **Metric Reader** from Metrics, which decides which metrics a person may read.
@@ -214,7 +216,7 @@ Intelligence never reads records itself. It asks Metrics, so certification, row 
 
 | Role | What it can do |
 |---|---|
-| Intelligence User | Ask, read own Questions, propose Examples |
+| Intelligence User | Ask (create a Question), read own Questions, propose Examples |
 | Intelligence Steward | Review and accept Examples |
 
 Reports: none. Print formats: none. Scheduled jobs: none.
@@ -223,7 +225,7 @@ Reports: none. Print formats: none. Scheduled jobs: none.
 
 | Endpoint | What it does |
 |---|---|
-| `POST /api/app/intelligence/ask` | `{question}` returns an answer, a question back or a plain no |
+| `POST /api/app/intelligence/ask` | `{question}` asks through `intelligence.question.create` and returns an answer, a question back or a plain no |
 | `GET /api/app/intelligence/questions` | The caller's last 50 questions, newest first, with a `stale` note where it applies |
 | `POST /api/app/intelligence/propose` | `{metric, why}` keeps a draft Solution for review |
 | `POST /api/app/intelligence/feedback` | `{phrase, metric}` proposes an example |
@@ -249,6 +251,7 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 | Ask a question in plain words | 🟡¹ | ✅ | ✅ | ✅ | 🟡² |
 | Free-form questions over any table | ❌ | ✅ | ✅ | ✅ | 🟡² |
 | A language model understands the question | ❌³ | ✅ | ✅ | ✅ | 🟡² |
+| Works with your own AI agent (MCP) | ✅¹³ | 🟡⁷ | 🟡⁷ | 🟡⁷ | 🟡⁷ |
 | Answers only from certified definitions | ✅ | 🟡⁴ | 🟡⁴ | 🟡⁴ | 🟡⁴ |
 | Evidence on each answer (certifier, definition fingerprint, lineage) | ✅ | 🟡⁵ | 🟡⁵ | 🟡⁵ | 🟡⁵ |
 | Each person's own row rights apply to the answer | ✅ | ✅ | 🟡⁶ | ✅ | 🟡⁶ |
@@ -256,8 +259,8 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 | Declines with a reason instead of guessing | ✅ | 🟡⁷ | 🟡⁷ | 🟡⁷ | 🟡⁷ |
 | Teach it your phrases, accepted by a second person | ✅ | ✅ | 🟡⁷ | ✅ | ❌ |
 | Group or filter by a dimension in the question | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Compare periods, ratios, top N | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Follow-up questions in one conversation | ❌ | ✅ | ✅ | ✅ | 🟡² |
+| Compare periods, ratios, top N | 🟡¹⁵ | ✅ | ✅ | ✅ | ✅ |
+| Follow-up questions in one conversation | ❌¹⁴ | ✅ | ✅ | ✅ | 🟡² |
 | Charts in the answer | 🟡⁸ | ✅ | ✅ | ✅ | ✅ |
 | Dashboards | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Alerts and subscriptions on figures | 🟡⁹ | ✅ | ✅ | ✅ | ✅ |
@@ -267,7 +270,7 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 | Self-hosted, data never leaves your server | ✅ | 🟡¹² | 🟡¹² | 🟡¹² | ✅ |
 | Question history kept for the asker | ✅ | 🟡⁷ | 🟡⁷ | 🟡⁷ | 🟡⁷ |
 
-<sub>¹ Rules only: a metric by name, a period by word, a stretch by number. ² Metabase's question features and any AI assistant depend on the edition. ³ A provider is a plug-in point; none is configured. ⁴ Each has a way to define and endorse shared measures or models; whether an answer is limited to them depends on setup. ⁵ Lineage and endorsement exist in separate views; we could not confirm they are attached to each answer. ⁶ Depends on edition and setup. ⁷ Not confirmed. ⁸ A series answer carries chart data; no chart screen ships. ⁹ Through Ferrum Metrics: people follow a metric and get a digest. ¹⁰ Only what Metrics reads: Ferrum's records and the external datasets Metrics' engine serves. ¹¹ Works in a mobile browser; we are not sure of a native app. ¹² Some on-premises versions exist, and their AI features may differ from the cloud ones.</sub>
+<sub>¹ Rules only: a metric by name, a period by word, a stretch by number. ² Metabase's question features and any AI assistant depend on the edition. ³ No model runs inside Ferrum, by design; a provider is a plug-in point and none is configured. What a model would do here, your own agent does over MCP (¹³). ⁴ Each has a way to define and endorse shared measures or models; whether an answer is limited to them depends on setup. ⁵ Lineage and endorsement exist in separate views; we could not confirm they are attached to each answer. ⁶ Depends on edition and setup. ⁷ Not confirmed. ⁸ A series answer carries chart data; no chart screen ships. ⁹ Through Ferrum Metrics: people follow a metric and get a digest. ¹⁰ Only what Metrics reads: Ferrum's records and the external datasets Metrics' engine serves. ¹¹ Works in a mobile browser; we are not sure of a native app. ¹² Some on-premises versions exist, and their AI features may differ from the cloud ones. ¹³ An agent connected to Ferrum over MCP, with its person's rights, lists the certified metrics, asks by creating a Question (`intelligence.question.create`, the same operation the screen uses; `tests/asks_it.rs`), proposes Examples, and accepts them where it holds Intelligence Steward (`intelligence.example.accept`, with its contract). Intelligence's guide (`app.yaml`, `shell.assistant`) says how; Ferrum's assistant reads it today, and Ferrum's MCP server will serve it to agents as the app's guide when its guides change lands. ¹⁴ Each question stands alone here; an agent keeps the conversation itself and asks each turn as a new Question. ¹⁵ The last two complete periods compared, exactly. A ratio is a composed metric an author defines and a steward certifies in Metrics. No top N: a metric is not grouped.</sub>
 
 ### 🏆 Where Intelligence stands out
 
@@ -281,7 +284,7 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 ### 🚧 Where the leaders are still ahead
 
 - Free-form understanding with language models, follow-up questions and a conversation.
-- Grouping, filtering, comparison and top-N in a question. Intelligence answers a value or a series, nothing else.
+- Grouping, filtering and top-N in a question, and comparisons other than the last two periods. Intelligence answers a value, a series or a change, nothing else.
 - Charts, dashboards, mobile apps, embedding and a wide range of data connectors.
 - Proactive insights: why a number moved, anomalies, forecasts.
 
@@ -292,6 +295,11 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 
 ### ✅ Recently shipped
 
+- [x] **0.5.0** "Compared to last month": the last two complete periods compared, exactly.
+- [x] **0.4.1** Intelligence's guide: how an agent, or the assistant, answers a question about a figure here.
+- [x] **0.4.0** Asking is one operation, `intelligence.question.create`, for a person's screen and an agent alike; it needs Intelligence User.
+- [x] **0.3.2** Accept It says what it does, what it returns and what done means, for processes and agents.
+- [x] **0.3.1** A question with letters such as "İ" no longer stops the answer; erasure reaches every address the app keeps.
 - [x] **0.3.0** Upkeep runs one workspace at a time, on whichever replica is free; needs Ferrum 0.4.0.
 - [x] **0.2.4** A proposal's description names the workspace's day, not UTC's.
 - [x] **0.2.2** The app has an icon in the launcher and the bar.
@@ -303,9 +311,7 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 ### 🔜 Next up
 
 - [ ] **A screen to ask in.** Today you ask over HTTP. A question box with the plan, the answer, the chart and the evidence, in Ferrum's own interface, is the first thing a person expects.
-- [ ] **A model provider** behind the existing trait, held to the evaluation set. It waits for a model key and a decision about where the model runs.
 - [ ] **Group by and filter by a dimension**, where a metric's definition allows it.
-- [ ] **Follow-up questions** that keep what the last one was about.
 - [ ] **Charts drawn from the answer's chart data**, in the screen above.
 - [ ] **A CI workflow** for this repository, with its test database, as the other Ferrum apps have.
 
@@ -314,7 +320,6 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 - [ ] **Understanding**: synonyms and word forms beyond exact names; several metrics in one question; comparing two periods.
 - [ ] **Explaining a change**: what moved a number between two periods, using Metrics' lineage.
 - [ ] **Proactive**: a question asked on a schedule and delivered, through Metrics' followed-metric digests.
-- [ ] **In Ferrum's assistant**: offer this as a source for the assistant's answers about figures.
 - [ ] **Evaluation in the open**: publish the fixed and adversarial question set as a document, with results per provider.
 - [ ] **More languages** for questions and answers.
 - [ ] **Feedback on an answer** (right, wrong, not what I meant), kept for the steward.
@@ -327,7 +332,7 @@ Intelligence is an app for the Ferrum platform (`>=0.4.0, <0.5`) and runs inside
 2. In Ferrum, open the **App Manager** (or the store) and install **Intelligence**. Self-hosters who build their own server image include it as a native app like the others.
 3. Give people roles: **Metric Reader** (from Metrics) so they can read certified metrics, and **Intelligence User** so they can ask and keep their questions. Give a few people **Intelligence Steward** to accept examples. Someone who proposes solutions also needs a **Solution Author** role.
 4. Have a Data Steward certify at least one metric in Metrics. With no certified metric, every question is declined.
-5. Ask: `POST /api/app/intelligence/ask` with `{"question": "What is Company customers?"}`.
+5. Ask: `POST /api/app/intelligence/ask` with `{"question": "What is Company customers?"}`, or create a Question (an agent does it with `create_record`).
 
 ## 🔧 Develop
 

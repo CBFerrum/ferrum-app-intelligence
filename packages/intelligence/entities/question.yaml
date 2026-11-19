@@ -4,9 +4,9 @@
   kind: master
   module: intelligence
   title_field: question
-  description: What someone asked, what it was taken to mean, and what came of it. The record behind every answer, kept for the person who asked.
+  description: What someone asked, what it was taken to mean, and what came of it. Asking is making one (a person's screen and an agent alike); kept for the person who asked.
   fields:
-    - {name: question, type: text, read_only: true, in_list: true}
+    - {name: question, type: text, in_list: true, read_only_if: "true", description: "Asked once: everything else on the record is worked out from it, with the asker's own rights"}
     - {name: asked_by, type: email, read_only: true, in_list: true, in_filter: true}
     - {name: outcome, type: select, options: [Answered, Asked Back, Declined], read_only: true, in_list: true, in_filter: true}
     - {name: understood_by, type: data, read_only: true, description: "What took the question to mean what it did: the rules, or a model"}
@@ -30,5 +30,12 @@
     - {name: proposed_by, type: email, read_only: true, no_copy: true, in_list: true}
     - {name: accepted_by, type: email, read_only: true, no_copy: true}
   actions:
-    - {name: accept, label: Accept It, permission: write, condition: "doc.status == 'Proposed'"}
+    - name: accept
+      label: Accept It
+      permission: write
+      condition: "doc.status == 'Proposed'"
+      contract:
+        effect: transactional_action
+        returns: {type: object, properties: {accepted: {type: string, format: uuid, x-ferrum-link: Example}}}
+        completion: "The example is Accepted and names who accepted it; questions asked from then on use it"
   list: {columns: [phrase, metric, status, proposed_by], sort: created_at desc}

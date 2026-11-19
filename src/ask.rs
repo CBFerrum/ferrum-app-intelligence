@@ -3,8 +3,9 @@
 //! rights, and the evidence behind it. A question back when it is not sure, and a plain no, with why, when
 //! it cannot answer: an honest abstention is an answer. Every question is kept, for the person who asked.
 
-use crate::intent::{Intent, MAX_QUESTION, MetricInfo, Provider, ProviderError, Understood};
+use crate::intent::{CHANGE_PERIODS, Intent, MAX_QUESTION, MetricInfo, Provider, ProviderError, Rules, Understood};
 use ferrum_domain::util::elevated;
+use ferrum_kernel::value::{decimal_value, parse_decimal};
 use ferrum_kernel::{Ctx, Doc, DocHook, Error, Filter, HookCtx, Kernel, ListQuery, Result, SiteRequest};
 use serde_json::{Map, Value, json};
 use std::time::Duration;
@@ -86,14 +87,17 @@ async fn accepted_examples(k: &Kernel, ctx: &Ctx) -> Result<Vec<(String, String)
 
 /// The question with each accepted example's phrase replaced by the metric it means, where the asker may read that
 /// metric: an example never reaches what its asker cannot. What was used, for the record.
+/// The question is lower-cased once and searched and replaced in that same text, so every index is one of its own char
+/// boundaries: a letter whose lower case is longer or shorter ("İ", "ẞ") cannot shift it. Understanding lower-cases the
+/// question anyway.
 fn with_examples(question: &str, examples: &[(String, String)], infos: &[MetricInfo]) -> (String, Vec<String>) {
-    let mut q = question.to_string();
+    let mut q = question.to_lowercase();
     let mut used = vec![];
     for (phrase, metric) in examples {
         if phrase.trim().is_empty() || !infos.iter().any(|m| &m.name == metric) {
             continue;
         }
-        if let Some(at) = q.to_lowercase().find(phrase.as_str()) {
+        if let Some(at) = q.find(phrase.as_str()) {
             q.replace_range(at..at + phrase.len(), metric);
             used.push(format!("{phrase} means {metric}"));
         }
@@ -101,12 +105,33 @@ fn with_examples(question: &str, examples: &[(String, String)], infos: &[MetricI
     (q, used)
 }
 
-/// [`ask`] within `budget`: past it, what was under way is dropped and the question declined (FLC-AI-005).
-pub async fn ask_within(k: &Kernel, ctx: &Ctx, provider: &dyn Provider, question: &str, budget: Duration) -> Result<Value> {
+/// A question as it enters: trimmed, 1 to [`MAX_QUESTION`] characters (not bytes).
+pub(crate) fn checked(question: &str) -> Result<&str> {
     let question = question.trim();
     if question.is_empty() || question.chars().count() > MAX_QUESTION {
         return Err(Error::field("question", format!("is 1 to {MAX_QUESTION} characters")));
     }
+    Ok(question)
+}
+
+/// [`ask`] within `budget`: past it, what was under way is dropped and the question declined (FLC-AI-005). It answers
+/// and keeps nothing: a question is kept only by asking it as the operation `intelligence.question.create`
+/// ([`QuestionHook`]), which answers with the rules.
+pub async fn ask_within(k: &Kernel, ctx: &Ctx, provider: &dyn Provider, question: &str, budget: Duration) -> Result<Value> {
+    Ok(answer(k, ctx, provider, question, budget).await?.answer)
+}
+
+/// What a question came to, worked out as `ctx` (their own rights): what its Question keeps.
+struct Answered {
+    outcome: &'static str,
+    intent: Value,
+    plan: Option<String>,
+    answer: Value,
+    reason: Option<String>,
+}
+
+async fn answer(k: &Kernel, ctx: &Ctx, provider: &dyn Provider, question: &str, budget: Duration) -> Result<Answered> {
+    let question = checked(question)?;
     let docs = readable(k, ctx).await?;
     let infos: Vec<MetricInfo> = docs.iter().filter_map(|d| Some(MetricInfo { name: text(d, "metric_name")?, unit: text(d, "unit") })).collect();
     let examples = accepted_examples(k, ctx).await?;
@@ -125,12 +150,65 @@ pub async fn ask_within(k: &Kernel, ctx: &Ctx, provider: &dyn Provider, question
     if !used.is_empty() {
         answer["examples_used"] = json!(used);
     }
-    let record = json!({
-        "question": question, "asked_by": ctx.email, "outcome": outcome, "understood_by": provider.name(),
-        "intent": intent, "plan": plan, "answer": answer, "reason": reason,
-    });
-    k.insert(&elevated(ctx), "Question", record.as_object().cloned().unwrap_or_default()).await?;
-    Ok(answer)
+    Ok(Answered { outcome, intent, plan, answer, reason })
+}
+
+/// Asking, as an operation: a Question created through the gate (`intelligence.question.create`) by a person's screen
+/// or an agent alike. Only its question is taken from the caller; everything else is worked out here, as the caller
+/// (`hc.ctx`, never elevated: their own rights to the metrics and to the records they count), with the rules.
+/// `ponytail:` the create's transaction stays open while Metrics reads (at most [`ASK_SECS`]); read first and record
+/// after only if that is measured to hurt.
+pub struct QuestionHook;
+
+#[async_trait::async_trait]
+impl DocHook for QuestionHook {
+    fn name(&self) -> &'static str {
+        "intelligence.question"
+    }
+
+    fn fills(&self) -> &'static [&'static str] {
+        &["asked_by", "outcome", "understood_by", "intent", "plan", "answer", "reason"]
+    }
+
+    async fn before_validate(&self, hc: &mut HookCtx<'_>, doc: &mut Doc) -> Result<()> {
+        // Worked out once, when it is asked; an erasure or any later write changes nothing of it here.
+        if doc.get("outcome").is_some_and(|o| !o.is_null()) {
+            return Ok(());
+        }
+        let question = checked(text(doc, "question").as_deref().unwrap_or_default())?.to_string();
+        let a = answer(hc.kernel, hc.ctx, &Rules, &question, Duration::from_secs(ASK_SECS)).await?;
+        let filled = json!({
+            "question": question, "asked_by": hc.ctx.email, "outcome": a.outcome, "understood_by": Rules.name(),
+            "intent": a.intent, "plan": a.plan, "answer": kept(&a.answer), "reason": a.reason,
+        });
+        doc.extend(filled.as_object().cloned().unwrap_or_default());
+        Ok(())
+    }
+}
+
+/// A kept answer as its asker reads it now: with who certified its metric, read from Metrics with their own rights
+/// when the metric is still certified as it was answered (the kept record does not copy the address, [`kept`]).
+pub(crate) async fn with_certifier(k: &Kernel, ctx: &Ctx, mut answer: Value) -> Value {
+    let (Some(metric), Some(definition)) = (answer["evidence"]["metric"].as_str(), answer["evidence"]["definition"].as_str()) else {
+        return answer;
+    };
+    let q = ListQuery { filters: vec![Filter::eq("metric_name", metric), Filter::eq("certified_hash", definition)], limit: Some(1), ..Default::default() };
+    let by = k.list(ctx, "Metric", &q).await.ok().and_then(|p| p.rows.into_iter().next()).and_then(|m| text(&m, "certified_by"));
+    if let Some(by) = by {
+        answer["evidence"]["certified_by"] = json!(by);
+    }
+    answer
+}
+
+/// An answer as it is kept: without who certified the metric. That address is Metrics' to keep and to erase
+/// (`Metric.certified_by`); a copy in every answer would outlive the person's erasure. The certification stays
+/// identified by the metric, its definition's fingerprint and when it was certified.
+fn kept(answer: &Value) -> Value {
+    let mut kept = answer.clone();
+    if let Some(evidence) = kept.get_mut("evidence").and_then(Value::as_object_mut) {
+        evidence.remove("certified_by");
+    }
+    kept
 }
 
 type Responded = (&'static str, Value, Option<String>, Value, Option<String>);
@@ -282,7 +360,33 @@ async fn answer_for(k: &Kernel, ctx: &Ctx, intent: &Intent, docs: &[Doc]) -> Res
             });
             Ok(json!({"status": "answered", "intent": intent.json(), "result": {"points": points, "unit": s["unit"]}, "chart": chart, "evidence": evidence}))
         }
+        Intent::Change { metric, period } => {
+            let s = metrics(k, ctx, "/series", json!({"metric": metric, "bucket": period.word(), "periods": CHANGE_PERIODS.to_string()})).await?;
+            let points = s["points"].as_array().cloned().unwrap_or_default();
+            let complete: Vec<&Value> = points.iter().filter(|p| p["partial"] != json!(true)).collect();
+            let [.., from, to] = complete.as_slice() else {
+                return Err(Error::invalid(format!("{metric} has fewer than two complete {}s to compare", period.word())));
+            };
+            let (change, percent) =
+                change(&from["value"], &to["value"]).ok_or_else(|| Error::invalid(format!("{metric} has no value for one of the two {}s", period.word())))?;
+            let mut evidence = evidence;
+            evidence["as_of"] = s["as_of"].clone();
+            let result = json!({
+                "from": {"start": from["start"], "value": from["value"]}, "to": {"start": to["start"], "value": to["value"]},
+                "change": change, "change_percent": percent, "unit": s["unit"],
+            });
+            Ok(json!({"status": "answered", "intent": intent.json(), "result": result, "evidence": evidence}))
+        }
     }
+}
+
+/// How far `to` is from `from`, exactly, and that as a percent of `from` to two places (none when `from` is zero, which
+/// no percent describes). None when either is not a number.
+fn change(from: &Value, to: &Value) -> Option<(Value, Value)> {
+    let (a, b) = (parse_decimal(from).ok()?, parse_decimal(to).ok()?);
+    let hundred = parse_decimal(&json!("100")).ok()?;
+    let percent = if a.is_zero() { Value::Null } else { decimal_value(((b - a) / a * hundred).round_dp(2)) };
+    Some((decimal_value(b - a), percent))
 }
 
 /// A proposal: a draft Solution that starts an ordinary reviewed process about a metric, kept as the
@@ -324,6 +428,70 @@ pub async fn propose(k: &Kernel, ctx: &Ctx, metric: &str, why: &str) -> Result<V
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn infos(names: &[&str]) -> Vec<MetricInfo> {
+        names.iter().map(|n| MetricInfo { name: n.to_string(), unit: None }).collect()
+    }
+
+    #[test]
+    fn examples_after_a_letter_whose_lower_case_is_longer() {
+        // "İ" is two bytes and its lower case three: a phrase found in the lower-cased question is replaced there.
+        let examples = vec![("people who buy from us".to_string(), "Customers (people)".to_string())];
+        let (asked, used) = with_examples("İİ people who buy from us", &examples, &infos(&["Customers (people)"]));
+        assert!(asked.contains("Customers (people)"), "{asked}");
+        assert_eq!(used, ["people who buy from us means Customers (people)"]);
+    }
+
+    /// Hard cases of mixed scripts: none panics, a phrase is found wherever it stands, and the length is counted in
+    /// characters where a question enters.
+    #[test]
+    fn mixed_script_questions_are_taken_by_characters() {
+        let examples = vec![("people who buy from us".to_string(), "Customers (people)".to_string())];
+        let metrics = infos(&["Customers (people)", "Straße Umsatz", "مبيعات الشهر"]);
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        for q in [
+            "İ people who buy from us",
+            "how many İstanbul people who buy from us",
+            "ẞ STRAßE people who buy from us",
+            "cafe\u{301} people who buy from us e\u{301}",
+            "ما هي people who buy from us؟",
+            "👩\u{200d}👩\u{200d}👧 people who buy from us 🇮🇳",
+            "\u{200f}people who buy from us\u{200e}",
+        ] {
+            let (asked, used) = with_examples(q, &examples, &metrics);
+            assert!(asked.contains("Customers (people)") && used.len() == 1, "{q:?} became {asked:?}");
+            let understood = rt.block_on(Rules.understand(&asked, &metrics)).unwrap();
+            assert!(matches!(understood, Understood::Intent { .. }), "{q:?}: {understood:?}");
+        }
+        // Names in other scripts are matched as they are written; "ß" is not "ss".
+        for (q, name) in [("straße umsatz by month", "Straße Umsatz"), ("STRASSE UMSATZ", ""), ("ما هي مبيعات الشهر", "مبيعات الشهر")]
+        {
+            let got = rt.block_on(Rules.understand(q, &metrics)).unwrap();
+            match got {
+                Understood::Intent { intent, .. } => assert_eq!(intent.metric(), name, "{q:?}"),
+                other => assert!(name.is_empty(), "{q:?}: {other:?}"),
+            }
+        }
+        // Where a question enters: 1 to 500 characters, however many bytes they take.
+        assert!(checked("").is_err() && checked(" \n\t ").is_err(), "empty and blank");
+        assert_eq!(checked("  What is X?  ").ok(), Some("What is X?"));
+        assert_eq!(checked(&"İ".repeat(MAX_QUESTION)).map(|q| q.chars().count()).ok(), Some(MAX_QUESTION), "500 two-byte letters are 500 characters");
+        assert!(checked(&"İ".repeat(MAX_QUESTION + 1)).is_err());
+        assert!(checked(&"👩\u{200d}👧".repeat(200)).is_err(), "600 characters, whatever they draw");
+    }
+
+    #[test]
+    fn change_of_two_decimals_is_exact() {
+        assert_eq!(change(&json!("0.1"), &json!("0.3")), Some((json!("0.2"), json!("200"))));
+        assert_eq!(change(&json!("3"), &json!("2")), Some((json!("-1"), json!("-33.33"))));
+        assert_eq!(change(&json!("12345678901234.5"), &json!("12345678901235")), Some((json!("0.5"), json!("0"))));
+    }
+
+    #[test]
+    fn change_from_zero_has_no_percent() {
+        assert_eq!(change(&json!("0"), &json!("5")), Some((json!("5"), Value::Null)));
+        assert_eq!(change(&json!(null), &json!("5")), None, "no value is not zero");
+    }
 
     #[test]
     fn a_value_read_from_stale_data_says_so() {
