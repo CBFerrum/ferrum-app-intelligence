@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0
+
+Needs the same platform as 0.3.2. No database migration. Package `intelligence` 0.3.0: Intelligence User may create a
+Question; Question's `question` is set once, when it is asked.
+
+- **Asking is an operation.** Asking is making a Question (`intelligence.question.create`), through the gate with a
+  receipt, so a person's screen and an agent connected over MCP do the same thing. A hook works out everything but the
+  question, with the asker's own rights and the rules; values sent for anything else are ignored. `POST ask` now asks
+  through that operation (an `Idempotency-Key` header keeps one question for a request sent twice) and answers as
+  before, with who certified the metric read from Metrics as the asker.
+- **Asking needs Intelligence User** as well as Metric Reader: someone with Metric Reader alone is refused and nothing
+  is kept.
+- `ask_with` and `ask_within` answer and keep nothing; they are for evaluations.
+
 ## 0.3.2
 
 Needs the same platform as 0.3.1. No database change, no interface change. Package `intelligence` 0.2.1.

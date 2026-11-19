@@ -1,6 +1,6 @@
 id: intelligence
 name: Intelligence
-version: 0.3.2
+version: 0.4.0
 publisher: cbferrum
 summary: "Ask about certified metrics in plain words: answered with your own rights, the plan and the evidence shown, a question back when unsure, a plain no when it cannot"
 description: README.md

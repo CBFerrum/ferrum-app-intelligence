@@ -7,7 +7,8 @@
 //!   asker's rights, the evidence behind it (who certified the metric, its lineage, when it was worked
 //!   out), and every question kept for the person who asked; a proposal kept as a draft Solution for an
 //!   ordinary review, never approved or activated here.
-//! * `site`: `/api/app/intelligence/ask`, `questions` and `propose`.
+//! * `site`: `/api/app/intelligence/ask` (the operation `intelligence.question.create`, as an agent asks too),
+//!   `questions`, `propose`, `feedback` and `examples/{id}/accept`.
 //!
 //! This app's own design; no code was copied (docs/PROVENANCE.md).
 
@@ -39,6 +40,7 @@ pub fn packages() -> std::result::Result<Vec<ferrum_meta::Package>, ferrum_meta:
 pub fn register(hooks: &mut HookRegistry) {
     hooks.add_site("intelligence", Arc::new(site::IntelligenceSite));
     hooks.register("Example", Arc::new(ask::ExampleHook));
+    hooks.register("Question", Arc::new(ask::QuestionHook));
 }
 
 /// This app's reports: none.
@@ -51,7 +53,8 @@ pub async fn maintenance(_k: &Kernel, _tenant: uuid::Uuid) -> Result<()> {
     Ok(())
 }
 
-/// Asks as `ctx` with a given provider: for a host that sets one up, and for evaluations.
+/// Answers as `ctx` with a given provider, keeping nothing: for evaluations. A question is kept only when it is asked
+/// as the operation `intelligence.question.create`.
 pub async fn ask_with(k: &Kernel, ctx: &ferrum_kernel::Ctx, provider: &dyn Provider, question: &str) -> Result<serde_json::Value> {
     ask::ask(k, ctx, provider, question).await
 }

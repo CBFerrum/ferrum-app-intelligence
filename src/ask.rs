@@ -3,7 +3,7 @@
 //! rights, and the evidence behind it. A question back when it is not sure, and a plain no, with why, when
 //! it cannot answer: an honest abstention is an answer. Every question is kept, for the person who asked.
 
-use crate::intent::{Intent, MAX_QUESTION, MetricInfo, Provider, ProviderError, Understood};
+use crate::intent::{Intent, MAX_QUESTION, MetricInfo, Provider, ProviderError, Rules, Understood};
 use ferrum_domain::util::elevated;
 use ferrum_kernel::{Ctx, Doc, DocHook, Error, Filter, HookCtx, Kernel, ListQuery, Result, SiteRequest};
 use serde_json::{Map, Value, json};
@@ -113,8 +113,23 @@ pub(crate) fn checked(question: &str) -> Result<&str> {
     Ok(question)
 }
 
-/// [`ask`] within `budget`: past it, what was under way is dropped and the question declined (FLC-AI-005).
+/// [`ask`] within `budget`: past it, what was under way is dropped and the question declined (FLC-AI-005). It answers
+/// and keeps nothing: a question is kept only by asking it as the operation `intelligence.question.create`
+/// ([`QuestionHook`]), which answers with the rules.
 pub async fn ask_within(k: &Kernel, ctx: &Ctx, provider: &dyn Provider, question: &str, budget: Duration) -> Result<Value> {
+    Ok(answer(k, ctx, provider, question, budget).await?.answer)
+}
+
+/// What a question came to, worked out as `ctx` (their own rights): what its Question keeps.
+struct Answered {
+    outcome: &'static str,
+    intent: Value,
+    plan: Option<String>,
+    answer: Value,
+    reason: Option<String>,
+}
+
+async fn answer(k: &Kernel, ctx: &Ctx, provider: &dyn Provider, question: &str, budget: Duration) -> Result<Answered> {
     let question = checked(question)?;
     let docs = readable(k, ctx).await?;
     let infos: Vec<MetricInfo> = docs.iter().filter_map(|d| Some(MetricInfo { name: text(d, "metric_name")?, unit: text(d, "unit") })).collect();
@@ -134,12 +149,54 @@ pub async fn ask_within(k: &Kernel, ctx: &Ctx, provider: &dyn Provider, question
     if !used.is_empty() {
         answer["examples_used"] = json!(used);
     }
-    let record = json!({
-        "question": question, "asked_by": ctx.email, "outcome": outcome, "understood_by": provider.name(),
-        "intent": intent, "plan": plan, "answer": kept(&answer), "reason": reason,
-    });
-    k.insert(&elevated(ctx), "Question", record.as_object().cloned().unwrap_or_default()).await?;
-    Ok(answer)
+    Ok(Answered { outcome, intent, plan, answer, reason })
+}
+
+/// Asking, as an operation: a Question created through the gate (`intelligence.question.create`) by a person's screen
+/// or an agent alike. Only its question is taken from the caller; everything else is worked out here, as the caller
+/// (`hc.ctx`, never elevated: their own rights to the metrics and to the records they count), with the rules.
+/// `ponytail:` the create's transaction stays open while Metrics reads (at most [`ASK_SECS`]); read first and record
+/// after only if that is measured to hurt.
+pub struct QuestionHook;
+
+#[async_trait::async_trait]
+impl DocHook for QuestionHook {
+    fn name(&self) -> &'static str {
+        "intelligence.question"
+    }
+
+    fn fills(&self) -> &'static [&'static str] {
+        &["asked_by", "outcome", "understood_by", "intent", "plan", "answer", "reason"]
+    }
+
+    async fn before_validate(&self, hc: &mut HookCtx<'_>, doc: &mut Doc) -> Result<()> {
+        // Worked out once, when it is asked; an erasure or any later write changes nothing of it here.
+        if doc.get("outcome").is_some_and(|o| !o.is_null()) {
+            return Ok(());
+        }
+        let question = checked(text(doc, "question").as_deref().unwrap_or_default())?.to_string();
+        let a = answer(hc.kernel, hc.ctx, &Rules, &question, Duration::from_secs(ASK_SECS)).await?;
+        let filled = json!({
+            "question": question, "asked_by": hc.ctx.email, "outcome": a.outcome, "understood_by": Rules.name(),
+            "intent": a.intent, "plan": a.plan, "answer": kept(&a.answer), "reason": a.reason,
+        });
+        doc.extend(filled.as_object().cloned().unwrap_or_default());
+        Ok(())
+    }
+}
+
+/// A kept answer as its asker reads it now: with who certified its metric, read from Metrics with their own rights
+/// when the metric is still certified as it was answered (the kept record does not copy the address, [`kept`]).
+pub(crate) async fn with_certifier(k: &Kernel, ctx: &Ctx, mut answer: Value) -> Value {
+    let (Some(metric), Some(definition)) = (answer["evidence"]["metric"].as_str(), answer["evidence"]["definition"].as_str()) else {
+        return answer;
+    };
+    let q = ListQuery { filters: vec![Filter::eq("metric_name", metric), Filter::eq("certified_hash", definition)], limit: Some(1), ..Default::default() };
+    let by = k.list(ctx, "Metric", &q).await.ok().and_then(|p| p.rows.into_iter().next()).and_then(|m| text(&m, "certified_by"));
+    if let Some(by) = by {
+        answer["evidence"]["certified_by"] = json!(by);
+    }
+    answer
 }
 
 /// An answer as it is kept: without who certified the metric. That address is Metrics' to keep and to erase
@@ -344,7 +401,6 @@ pub async fn propose(k: &Kernel, ctx: &Ctx, metric: &str, why: &str) -> Result<V
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::intent::Rules;
 
     fn infos(names: &[&str]) -> Vec<MetricInfo> {
         names.iter().map(|n| MetricInfo { name: n.to_string(), unit: None }).collect()

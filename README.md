@@ -7,7 +7,7 @@
 
 <br>
 
-[![Version](https://img.shields.io/badge/version-0.3.2-6d28d9?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.0-6d28d9?style=flat-square)](CHANGELOG.md)
 [![Licence: AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue?style=flat-square)](LICENSE)
 [![Ferrum platform](https://img.shields.io/badge/runs%20on-Ferrum-2f5bea?style=flat-square)](https://github.com/CBFerrum/Ferrum)
 ![Rust](https://img.shields.io/badge/Rust-server-b7410e?style=flat-square&logo=rust)
@@ -36,7 +36,7 @@ Intelligence turns a question such as "average company terms by month for the la
 
 | | |
 |---|---|
-| **Version** | 0.3.2 |
+| **Version** | 0.4.0 |
 | **Kind** | Records screens plus HTTP endpoints. It has no `shell.app` entry and no interface of its own: it appears as the Intelligence module (a home with recent questions, Questions and Examples) in Ferrum's records screens at `/data/intelligence/`, with an icon in the launcher and the bar. |
 | **What it adds** | 2 entities (Question, Example), 2 roles, 1 module, 5 endpoints, no reports, no print formats, no scheduled jobs |
 | **Depends on** | Ferrum platform `>=0.4.0, <0.5`; the `metrics` package (Ferrum Metrics) |
@@ -110,12 +110,13 @@ Asking itself is an HTTP call (see Endpoints under Data model), so it is not in 
 
 ### 💬 Asking a question
 
-- **One endpoint to ask.** `POST /api/app/intelligence/ask` with `{"question": "…"}` returns an answer, a question back or a plain no. A question is 1 to 500 characters. The caller must be signed in.
+- **Asking is one operation.** Asking is making a Question: `intelligence.question.create` with `{"values": {"question": "…"}}`, through Ferrum's gate with a receipt. A person's screen and an agent connected over MCP (`create_record` on Question, with an `idempotency_key`) make the same call and get the same answer, kept on the Question with its outcome, plan and evidence. Only the question is taken from the caller: everything else is worked out from it with the caller's own rights, and anything else sent is ignored. A question is 1 to 500 characters.
+- **The endpoint.** `POST /api/app/intelligence/ask` with `{"question": "…"}` asks through that operation and returns the answer: an answer, a question back or a plain no. An `Idempotency-Key` header (8 to 200 characters) makes a request sent twice keep one question.
 - **A typed request, never a query.** A question becomes a request about the certified metrics the asker may read, and only what Metrics can do with them: **a value**, or **a value period by period** (a series). Nothing in a question becomes a query, a filter or an action.
 - **The plan is said first.** Before anything is read, the plan is written in words and kept with the answer (for example "Read the certified metric Invoiced sales, as it stands now, with your own rights to the records it counts").
 - **Series by period.** A series goes by day, week, month, quarter or year, over 1 to 120 periods; 12 when the question gives no number. A series answer also carries chart data (line chart: x, y, a flag for the period not yet over, and the unit). The period not yet over is marked partial.
 - **A bounded question.** A question takes at most 20 seconds, understanding and reading together. Past that it stops and reads nothing more.
-- **Who may ask.** The asker needs a role that reads certified metrics (Metric Reader). Without it the answer is a refusal that says so.
+- **Who may ask.** The asker needs **Intelligence User** (to ask) and a role that reads certified metrics (**Metric Reader**). Without either, the answer is a refusal that says so, and nothing is kept. A figure the asker may not read is never given as a number, a count or a zero: a metric they cannot read is not there to answer from, and one over records they cannot read is refused with Metrics' reason.
 
 ### 🧠 Understanding the question
 
@@ -172,7 +173,7 @@ Words such as delete, remove, drop, update, insert, approve, deploy, activate, g
 
 | Role | What it can do |
 |---|---|
-| **Intelligence User** | Asks about the certified metrics they may read, reads their own Questions, proposes and reads their own Examples |
+| **Intelligence User** | Asks (with Metric Reader) about the certified metrics they may read, reads their own Questions, proposes and reads their own Examples |
 | **Intelligence Steward** | Reads and changes Examples, and accepts those that say what a phrase means here, never their own |
 
 Both are used with **Metric Reader** from Metrics, which decides which metrics a person may read.
@@ -214,7 +215,7 @@ Intelligence never reads records itself. It asks Metrics, so certification, row 
 
 | Role | What it can do |
 |---|---|
-| Intelligence User | Ask, read own Questions, propose Examples |
+| Intelligence User | Ask (create a Question), read own Questions, propose Examples |
 | Intelligence Steward | Review and accept Examples |
 
 Reports: none. Print formats: none. Scheduled jobs: none.
@@ -223,7 +224,7 @@ Reports: none. Print formats: none. Scheduled jobs: none.
 
 | Endpoint | What it does |
 |---|---|
-| `POST /api/app/intelligence/ask` | `{question}` returns an answer, a question back or a plain no |
+| `POST /api/app/intelligence/ask` | `{question}` asks through `intelligence.question.create` and returns an answer, a question back or a plain no |
 | `GET /api/app/intelligence/questions` | The caller's last 50 questions, newest first, with a `stale` note where it applies |
 | `POST /api/app/intelligence/propose` | `{metric, why}` keeps a draft Solution for review |
 | `POST /api/app/intelligence/feedback` | `{phrase, metric}` proposes an example |
@@ -292,6 +293,7 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 
 ### ✅ Recently shipped
 
+- [x] **0.4.0** Asking is one operation, `intelligence.question.create`, for a person's screen and an agent alike; it needs Intelligence User.
 - [x] **0.3.2** Accept It says what it does, what it returns and what done means, for processes and agents.
 - [x] **0.3.1** A question with letters such as "İ" no longer stops the answer; erasure reaches every address the app keeps.
 - [x] **0.3.0** Upkeep runs one workspace at a time, on whichever replica is free; needs Ferrum 0.4.0.
@@ -329,7 +331,7 @@ Intelligence is an app for the Ferrum platform (`>=0.4.0, <0.5`) and runs inside
 2. In Ferrum, open the **App Manager** (or the store) and install **Intelligence**. Self-hosters who build their own server image include it as a native app like the others.
 3. Give people roles: **Metric Reader** (from Metrics) so they can read certified metrics, and **Intelligence User** so they can ask and keep their questions. Give a few people **Intelligence Steward** to accept examples. Someone who proposes solutions also needs a **Solution Author** role.
 4. Have a Data Steward certify at least one metric in Metrics. With no certified metric, every question is declined.
-5. Ask: `POST /api/app/intelligence/ask` with `{"question": "What is Company customers?"}`.
+5. Ask: `POST /api/app/intelligence/ask` with `{"question": "What is Company customers?"}`, or create a Question (an agent does it with `create_record`).
 
 ## 🔧 Develop
 
