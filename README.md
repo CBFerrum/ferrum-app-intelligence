@@ -7,7 +7,7 @@
 
 <br>
 
-[![Version](https://img.shields.io/badge/version-0.3.1-6d28d9?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.2-6d28d9?style=flat-square)](CHANGELOG.md)
 [![Licence: AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue?style=flat-square)](LICENSE)
 [![Ferrum platform](https://img.shields.io/badge/runs%20on-Ferrum-2f5bea?style=flat-square)](https://github.com/CBFerrum/Ferrum)
 ![Rust](https://img.shields.io/badge/Rust-server-b7410e?style=flat-square&logo=rust)
@@ -36,7 +36,7 @@ Intelligence turns a question such as "average company terms by month for the la
 
 | | |
 |---|---|
-| **Version** | 0.3.1 |
+| **Version** | 0.3.2 |
 | **Kind** | Records screens plus HTTP endpoints. It has no `shell.app` entry and no interface of its own: it appears as the Intelligence module (a home with recent questions, Questions and Examples) in Ferrum's records screens at `/data/intelligence/`, with an icon in the launcher and the bar. |
 | **What it adds** | 2 entities (Question, Example), 2 roles, 1 module, 5 endpoints, no reports, no print formats, no scheduled jobs |
 | **Depends on** | Ferrum platform `>=0.4.0, <0.5`; the `metrics` package (Ferrum Metrics) |
@@ -292,6 +292,7 @@ Intelligence sits next to the natural-language features of Microsoft Power BI (Q
 
 ### ✅ Recently shipped
 
+- [x] **0.3.2** Accept It says what it does, what it returns and what done means, for processes and agents.
 - [x] **0.3.1** A question with letters such as "İ" no longer stops the answer; erasure reaches every address the app keeps.
 - [x] **0.3.0** Upkeep runs one workspace at a time, on whichever replica is free; needs Ferrum 0.4.0.
 - [x] **0.2.4** A proposal's description names the workspace's day, not UTC's.

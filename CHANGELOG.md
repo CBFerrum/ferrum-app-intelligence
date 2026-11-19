@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2
+
+Needs the same platform as 0.3.1. No database change, no interface change. Package `intelligence` 0.2.1.
+
+- **Accept It has a contract.** `intelligence.example.accept` says what it does (a transactional action), what it
+  returns (`{accepted: <the example's id>}`) and what done means, so a process or an agent knows what it gets. It takes
+  no parameters.
+
 ## 0.3.1
 
 Needs the same platform as 0.3.0. No database change, no interface change.

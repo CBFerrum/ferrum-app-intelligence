@@ -66,3 +66,23 @@ pub async fn ask_within(
 ) -> Result<serde_json::Value> {
     ask::ask_within(k, ctx, provider, question, budget).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every action a person or an agent can press says what it does, what it returns and what "done" means
+    /// (docs/logic/capabilities.md), and declares the parameters its handler reads (none here).
+    #[test]
+    fn accept_has_its_contract() {
+        let package = packages().expect("packages").into_iter().find(|p| p.manifest.package == "intelligence").expect("intelligence");
+        let example = package.entities.iter().find(|e| e.name == "Example").expect("Example");
+        let accept = example.actions.iter().find(|a| a.name == "accept").expect("accept");
+        let contract = accept.contract.as_ref().expect("a contract");
+        assert_eq!(serde_json::to_value(contract.effect).unwrap(), "transactional_action");
+        assert_eq!(contract.returns.as_ref().unwrap()["properties"]["accepted"]["x-ferrum-link"], "Example");
+        assert!(contract.completion.as_deref().is_some_and(|c| c.contains("Accepted")));
+        assert!(accept.params.is_empty(), "the handler reads no parameters");
+        assert!(!accept.hidden, "a person presses it");
+    }
+}

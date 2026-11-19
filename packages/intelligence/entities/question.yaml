@@ -30,5 +30,12 @@
     - {name: proposed_by, type: email, read_only: true, no_copy: true, in_list: true}
     - {name: accepted_by, type: email, read_only: true, no_copy: true}
   actions:
-    - {name: accept, label: Accept It, permission: write, condition: "doc.status == 'Proposed'"}
+    - name: accept
+      label: Accept It
+      permission: write
+      condition: "doc.status == 'Proposed'"
+      contract:
+        effect: transactional_action
+        returns: {type: object, properties: {accepted: {type: string, format: uuid, x-ferrum-link: Example}}}
+        completion: "The example is Accepted and names who accepted it; questions asked from then on use it"
   list: {columns: [phrase, metric, status, proposed_by], sort: created_at desc}
