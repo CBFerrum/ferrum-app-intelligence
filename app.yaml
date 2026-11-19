@@ -1,6 +1,6 @@
 id: intelligence
 name: Intelligence
-version: 0.4.1
+version: 0.5.0
 publisher: cbferrum
 summary: "Ask about certified metrics in plain words: answered with your own rights, the plan and the evidence shown, a question back when unsure, a plain no when it cannot"
 description: README.md
@@ -23,7 +23,8 @@ contributes:
         different figures and a figure someone may not read is refused, never given as zero. To answer a question about
         a figure: list the Metric records whose status is Certified (metric_name, unit, uses, description) and choose
         the one that fits. Then ask by creating a Question whose question names that metric in plain words ("What is
-        Company customers?", "Company customers by month for the last 6 months"). The Question comes back with its
+        Company customers?", "Company customers by month for the last 6 months", "Company customers compared to last
+        month"). The Question comes back with its
         outcome: Answered, Asked Back or Declined. Its answer holds the result, the plan that was followed and the
         evidence (the metric, when it was certified, its definition's fingerprint, its lineage, when it was worked out),
         and any limits, such as data older than its source allows: give the evidence and the limits with the figure.

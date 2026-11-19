@@ -3,8 +3,9 @@
 //! rights, and the evidence behind it. A question back when it is not sure, and a plain no, with why, when
 //! it cannot answer: an honest abstention is an answer. Every question is kept, for the person who asked.
 
-use crate::intent::{Intent, MAX_QUESTION, MetricInfo, Provider, ProviderError, Rules, Understood};
+use crate::intent::{CHANGE_PERIODS, Intent, MAX_QUESTION, MetricInfo, Provider, ProviderError, Rules, Understood};
 use ferrum_domain::util::elevated;
+use ferrum_kernel::value::{decimal_value, parse_decimal};
 use ferrum_kernel::{Ctx, Doc, DocHook, Error, Filter, HookCtx, Kernel, ListQuery, Result, SiteRequest};
 use serde_json::{Map, Value, json};
 use std::time::Duration;
@@ -359,7 +360,33 @@ async fn answer_for(k: &Kernel, ctx: &Ctx, intent: &Intent, docs: &[Doc]) -> Res
             });
             Ok(json!({"status": "answered", "intent": intent.json(), "result": {"points": points, "unit": s["unit"]}, "chart": chart, "evidence": evidence}))
         }
+        Intent::Change { metric, period } => {
+            let s = metrics(k, ctx, "/series", json!({"metric": metric, "bucket": period.word(), "periods": CHANGE_PERIODS.to_string()})).await?;
+            let points = s["points"].as_array().cloned().unwrap_or_default();
+            let complete: Vec<&Value> = points.iter().filter(|p| p["partial"] != json!(true)).collect();
+            let [.., from, to] = complete.as_slice() else {
+                return Err(Error::invalid(format!("{metric} has fewer than two complete {}s to compare", period.word())));
+            };
+            let (change, percent) =
+                change(&from["value"], &to["value"]).ok_or_else(|| Error::invalid(format!("{metric} has no value for one of the two {}s", period.word())))?;
+            let mut evidence = evidence;
+            evidence["as_of"] = s["as_of"].clone();
+            let result = json!({
+                "from": {"start": from["start"], "value": from["value"]}, "to": {"start": to["start"], "value": to["value"]},
+                "change": change, "change_percent": percent, "unit": s["unit"],
+            });
+            Ok(json!({"status": "answered", "intent": intent.json(), "result": result, "evidence": evidence}))
+        }
     }
+}
+
+/// How far `to` is from `from`, exactly, and that as a percent of `from` to two places (none when `from` is zero, which
+/// no percent describes). None when either is not a number.
+fn change(from: &Value, to: &Value) -> Option<(Value, Value)> {
+    let (a, b) = (parse_decimal(from).ok()?, parse_decimal(to).ok()?);
+    let hundred = parse_decimal(&json!("100")).ok()?;
+    let percent = if a.is_zero() { Value::Null } else { decimal_value(((b - a) / a * hundred).round_dp(2)) };
+    Some((decimal_value(b - a), percent))
 }
 
 /// A proposal: a draft Solution that starts an ordinary reviewed process about a metric, kept as the
@@ -451,6 +478,19 @@ mod tests {
         assert_eq!(checked(&"İ".repeat(MAX_QUESTION)).map(|q| q.chars().count()).ok(), Some(MAX_QUESTION), "500 two-byte letters are 500 characters");
         assert!(checked(&"İ".repeat(MAX_QUESTION + 1)).is_err());
         assert!(checked(&"👩\u{200d}👧".repeat(200)).is_err(), "600 characters, whatever they draw");
+    }
+
+    #[test]
+    fn change_of_two_decimals_is_exact() {
+        assert_eq!(change(&json!("0.1"), &json!("0.3")), Some((json!("0.2"), json!("200"))));
+        assert_eq!(change(&json!("3"), &json!("2")), Some((json!("-1"), json!("-33.33"))));
+        assert_eq!(change(&json!("12345678901234.5"), &json!("12345678901235")), Some((json!("0.5"), json!("0"))));
+    }
+
+    #[test]
+    fn change_from_zero_has_no_percent() {
+        assert_eq!(change(&json!("0"), &json!("5")), Some((json!("5"), Value::Null)));
+        assert_eq!(change(&json!(null), &json!("5")), None, "no value is not zero");
     }
 
     #[test]

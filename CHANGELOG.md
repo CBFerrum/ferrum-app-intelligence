@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0
+
+Needs the same platform as 0.4.1. No database change, no interface change.
+
+- **How a figure changed.** A question with a change word ("compared to last month", "growth", "vs") becomes a
+  change: the last two complete periods of the metric's series (by the period named, by month when none is), both
+  values, the change, and the change as a percent of the earlier one to two places, in exact decimals; no percent of
+  a change from zero. The period not yet over is left out and the plan says so. Kept on the Question as intent
+  `{kind: change, metric, period}`. The evaluation set has one more case.
+
 ## 0.4.1
 
 Needs the same platform as 0.4.0. No database change, no interface change.

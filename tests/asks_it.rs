@@ -208,3 +208,37 @@ fn an_agents_create_answers_as_the_screen_does() {
         assert_eq!(agent.result["question"], "company customers by month for the last 3 months");
     });
 }
+
+/// Moves a customer's making `months` back, as if it had been made then: what a series by `created_at` counts.
+async fn made_months_ago(k: &Kernel, admin: &Ctx, name: &str, months: i32) {
+    let table = k.entity(admin, "Customer").unwrap().table.clone();
+    let mut tx = k.db.tenant_tx(admin.tenant).await.unwrap();
+    // The table's name is the kernel's own (`EffEntity::table`), never input.
+    sqlx::query(sqlx::AssertSqlSafe(format!("update {table} set created_at = created_at - make_interval(months => $2) where customer_name = $1")))
+        .bind(name)
+        .bind(months)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+}
+
+#[test]
+fn change_compares_the_last_two_complete_periods() {
+    run(async {
+        let w = world("change").await;
+        // Two months ago: Globex (the rep's); last month: Acme (the rep's) and Initech (the director's); this month: none.
+        made_months_ago(&w.k, &w.admin, "Globex", 2).await;
+        made_months_ago(&w.k, &w.admin, "Acme", 1).await;
+        made_months_ago(&w.k, &w.admin, "Initech", 1).await;
+        let director = ask_route(&w.k, &w.director, "company customers compared to last month", None).await.unwrap();
+        assert_eq!(director["intent"]["kind"], "change", "{director}");
+        let r = &director["result"];
+        assert_eq!((r["from"]["value"].as_str(), r["to"]["value"].as_str()), (Some("1"), Some("2")), "{director}");
+        assert_eq!((r["change"].as_str(), r["change_percent"].as_str()), (Some("1"), Some("100")), "{director}");
+        assert!(director["plan"].as_str().unwrap().contains("compare the last two complete months"), "{director}");
+        // The rep's own rights: one of theirs each month, no change.
+        let rep = w.k.invoke(&w.rep, asking(json!({"question": "company customers compared to last month"}), "ask-0008-change")).await.unwrap().result;
+        assert_eq!((rep["answer"]["result"]["change"].as_str(), rep["answer"]["result"]["change_percent"].as_str()), (Some("0"), Some("0")), "{rep}");
+    });
+}
